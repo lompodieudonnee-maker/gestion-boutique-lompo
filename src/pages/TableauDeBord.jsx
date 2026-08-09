@@ -12,6 +12,9 @@ function TableauDeBord() {
   const [benefice, setBenefice] = useState(0)
   const [chargement, setChargement] = useState(true)
 
+  const employe = JSON.parse(localStorage.getItem('employeConnecte'))
+  const boutiqueId = employe?.boutique_id
+
   useEffect(() => {
     chargerDonnees()
   }, [])
@@ -20,7 +23,10 @@ function TableauDeBord() {
     setChargement(true)
 
     // Produits
-    const { data: produits } = await supabase.from('products').select('quantite, seuil_alerte')
+    const { data: produits } = await supabase
+      .from('products')
+      .select('quantite, seuil_alerte')
+      .eq('boutique_id', boutiqueId)
     if (produits) {
       setNbProduits(produits.length)
       const alertes = produits.filter((p) => Number(p.quantite) <= Number(p.seuil_alerte)).length
@@ -33,6 +39,7 @@ function TableauDeBord() {
     const { data: ventes } = await supabase
       .from('sales')
       .select('total, created_at')
+      .eq('boutique_id', boutiqueId)
     if (ventes) {
       const ventesJour = ventes.filter((v) => new Date(v.created_at) >= debutJour)
       const totalJour = ventesJour.reduce((s, v) => s + Number(v.total || 0), 0)
@@ -41,38 +48,54 @@ function TableauDeBord() {
       const totalVentesGlobal = ventes.reduce((s, v) => s + Number(v.total || 0), 0)
 
       // Dépenses
-      const { data: depenses } = await supabase.from('depenses').select('montant')
+      const { data: depenses } = await supabase
+        .from('depenses')
+        .select('montant')
+        .eq('boutique_id', boutiqueId)
       const totalDepenses = depenses ? depenses.reduce((s, d) => s + Number(d.montant || 0), 0) : 0
 
       // Achats fournisseurs
-      const { data: achats } = await supabase.from('achats').select('montant_total')
+      const { data: achats } = await supabase
+        .from('achats')
+        .select('montant_total')
+        .eq('boutique_id', boutiqueId)
       const totalAchats = achats ? achats.reduce((s, a) => s + Number(a.montant_total || 0), 0) : 0
 
       setBenefice(totalVentesGlobal - totalDepenses - totalAchats)
 
       // Dettes fournisseurs (reste à payer sur achats non soldés)
-      if (achats) {
-        const { data: achatsDetail } = await supabase.from('achats').select('montant_total, montant_paye')
-        const dettes = achatsDetail
-          ? achatsDetail.reduce((s, a) => s + (Number(a.montant_total) - Number(a.montant_paye)), 0)
-          : 0
-        setTotalDettes(dettes)
-      }
+      const { data: achatsDetail } = await supabase
+        .from('achats')
+        .select('montant_total, montant_paye')
+        .eq('boutique_id', boutiqueId)
+      const dettes = achatsDetail
+        ? achatsDetail.reduce((s, a) => s + (Number(a.montant_total) - Number(a.montant_paye)), 0)
+        : 0
+      setTotalDettes(dettes)
     }
 
     // Clients
-    const { data: clients } = await supabase.from('clients').select('id')
+    const { data: clients } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('boutique_id', boutiqueId)
     if (clients) setNbClients(clients.length)
 
     // Créances (reste à payer sur crédits non soldés)
-    const { data: credits } = await supabase.from('credits').select('montant_total, montant_paye')
+    const { data: credits } = await supabase
+      .from('credits')
+      .select('montant_total, montant_paye')
+      .eq('boutique_id', boutiqueId)
     if (credits) {
       const creances = credits.reduce((s, c) => s + (Number(c.montant_total) - Number(c.montant_paye)), 0)
       setTotalCreances(creances)
     }
 
     // Fournisseurs
-    const { data: fournisseurs } = await supabase.from('fournisseurs').select('id')
+    const { data: fournisseurs } = await supabase
+      .from('fournisseurs')
+      .select('id')
+      .eq('boutique_id', boutiqueId)
     if (fournisseurs) setNbFournisseurs(fournisseurs.length)
 
     setChargement(false)

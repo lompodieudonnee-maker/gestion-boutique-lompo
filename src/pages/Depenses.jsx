@@ -10,6 +10,9 @@ function Depenses() {
   const [totalVentes, setTotalVentes] = useState(0)
   const [totalAchats, setTotalAchats] = useState(0)
 
+  const employe = JSON.parse(localStorage.getItem('employeConnecte'))
+  const boutiqueId = employe?.boutique_id
+
   useEffect(() => {
     chargerDepenses()
     chargerTotalVentes()
@@ -20,12 +23,16 @@ function Depenses() {
     const { data, error } = await supabase
       .from('depenses')
       .select('*')
+      .eq('boutique_id', boutiqueId)
       .order('created_at', { ascending: false })
     if (!error) setDepenses(data)
   }
 
   async function chargerTotalVentes() {
-    const { data, error } = await supabase.from('sales').select('total')
+    const { data, error } = await supabase
+      .from('sales')
+      .select('total')
+      .eq('boutique_id', boutiqueId)
     if (!error && data) {
       const total = data.reduce((somme, vente) => somme + Number(vente.total || 0), 0)
       setTotalVentes(total)
@@ -33,7 +40,10 @@ function Depenses() {
   }
 
   async function chargerTotalAchats() {
-    const { data, error } = await supabase.from('achats').select('montant_total')
+    const { data, error } = await supabase
+      .from('achats')
+      .select('montant_total')
+      .eq('boutique_id', boutiqueId)
     if (!error && data) {
       const total = data.reduce((somme, achat) => somme + Number(achat.montant_total || 0), 0)
       setTotalAchats(total)
@@ -46,7 +56,7 @@ function Depenses() {
       return
     }
     const { error } = await supabase.from('depenses').insert([
-      { categorie, description, montant: Number(montant) },
+      { categorie, description, montant: Number(montant), boutique_id: boutiqueId },
     ])
     if (error) {
       alert('Erreur : ' + error.message)
@@ -56,6 +66,8 @@ function Depenses() {
     setDescription('')
     setMontant('')
     chargerDepenses()
+    chargerTotalVentes()
+    chargerTotalAchats()
   }
 
   const totalDepenses = depenses.reduce((somme, d) => somme + Number(d.montant || 0), 0)

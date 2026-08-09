@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 function Clients() {
+  const employe = JSON.parse(localStorage.getItem('employeConnecte'))
+  const boutiqueId = employe?.boutique_id
+
   const [clients, setClients] = useState([])
   const [clientSelectionne, setClientSelectionne] = useState(null)
   const [credits, setCredits] = useState([])
@@ -21,6 +24,7 @@ function Clients() {
     const { data, error } = await supabase
       .from('clients')
       .select('*')
+      .eq('boutique_id', boutiqueId)
       .order('nom', { ascending: true })
     if (!error) setClients(data)
   }
@@ -41,7 +45,7 @@ function Clients() {
     }
     const { error } = await supabase
       .from('clients')
-      .insert([{ nom, telephone, adresse }])
+      .insert([{ nom, telephone, adresse, boutique_id: boutiqueId }])
 
     if (error) {
       alert('Erreur : ' + error.message)
@@ -63,14 +67,15 @@ function Clients() {
       alert('Entrez un montant valide')
       return
     }
-    const { error } = await supabase.from('credits').insert([
+    const { error } = await supabase.from('credits').insert(
       {
         client_id: clientSelectionne.id,
         montant_total: Number(montantCredit),
         montant_paye: 0,
         statut: 'en cours',
-      },
-    ])
+        boutique_id: boutiqueId,
+      }
+    )
     if (error) {
       alert('Erreur : ' + error.message)
       return
@@ -125,13 +130,13 @@ function Clients() {
       <div style={{ flex: 1 }}>
         <h2>👥 Clients</h2>
 
-        <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
+        <div style={{ marginBottom: '20px', padding: '15px', border: '1px solid #ccc', borderRadius: '8px' }}>
           <h4>Ajouter un client</h4>
           <input style={styleInput} placeholder="Nom" value={nom} onChange={(e) => setNom(e.target.value)} />
           <input style={styleInput} placeholder="Téléphone" value={telephone} onChange={(e) => setTelephone(e.target.value)} />
           <input style={styleInput} placeholder="Adresse" value={adresse} onChange={(e) => setAdresse(e.target.value)} />
           <br />
-          <button style={styleBouton} onClick={ajouterClient}>+ Ajouter</button>
+          <button style={styleBouton} onClick={ajouterClient}>Ajouter</button>
         </div>
 
         <div>
@@ -142,7 +147,7 @@ function Clients() {
               style={{
                 padding: '10px',
                 marginBottom: '6px',
-                backgroundColor: clientSelectionne?.id === client.id ? '#333' : '#eee',
+                backgroundColor: clientSelectionne?.id === client.id ? '#333' : '#f5f5f5',
                 color: clientSelectionne?.id === client.id ? 'white' : 'black',
                 borderRadius: '6px',
                 cursor: 'pointer',
@@ -163,7 +168,7 @@ function Clients() {
           <>
             <h2>💰 Crédits de {clientSelectionne.nom}</h2>
 
-            <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
+            <div style={{ marginBottom: '20px', padding: '15px', border: '1px solid #ccc', borderRadius: '8px' }}>
               <h4>Nouveau crédit</h4>
               <input
                 style={styleInput}
@@ -172,7 +177,7 @@ function Clients() {
                 value={montantCredit}
                 onChange={(e) => setMontantCredit(e.target.value)}
               />
-              <button style={styleBouton} onClick={ajouterCredit}>+ Ajouter le crédit</button>
+              <button style={styleBouton} onClick={ajouterCredit}>Ajouter</button>
             </div>
 
             {credits.length === 0 && <p>Aucun crédit pour ce client.</p>}
@@ -187,12 +192,12 @@ function Clients() {
                     marginBottom: '10px',
                     border: '1px solid #ddd',
                     borderRadius: '8px',
-                    backgroundColor: credit.statut === 'solde' ? '#e8f5e9' : '#fff8e1',
+                    backgroundColor: credit.statut === 'solde' ? '#d4edda' : '#fff3cd',
                   }}
                 >
-                  <div>Montant total : <strong>{credit.montant_total} FCFA</strong></div>
+                  <div>Montant total : <strong>{credit.montant_total}</strong> FCFA</div>
                   <div>Déjà payé : {credit.montant_paye} FCFA</div>
-                  <div>Reste à payer : <strong>{resteAPayer} FCFA</strong></div>
+                  <div>Reste à payer : <strong>{resteAPayer}</strong> FCFA</div>
                   <div>Statut : {credit.statut === 'solde' ? '✅ Soldé' : '⏳ En cours'}</div>
 
                   {credit.statut !== 'solde' && (

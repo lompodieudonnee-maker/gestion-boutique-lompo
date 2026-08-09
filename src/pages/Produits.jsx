@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 function Produits() {
+  const employe = JSON.parse(localStorage.getItem('employeConnecte'))
+  const boutiqueId = employe?.boutique_id
+
   const [produits, setProduits] = useState([])
   const [chargement, setChargement] = useState(true)
 
@@ -20,6 +23,7 @@ function Produits() {
     const { data, error } = await supabase
       .from('products')
       .select('*')
+      .eq('boutique_id', boutiqueId)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -48,16 +52,15 @@ function Produits() {
   async function ajouterProduit(e) {
     e.preventDefault()
 
-    const { error } = await supabase.from('products').insert([
-      {
-        nom: nom,
-        categorie: categorie,
-        prix_achat: parseFloat(prixAchat),
-        prix_vente: parseFloat(prixVente),
-        quantite: parseInt(quantite),
-        seuil_alerte: parseInt(seuilAlerte),
-      },
-    ])
+    const { error } = await supabase.from('products').insert({
+      nom: nom,
+      categorie: categorie,
+      prix_achat: parseFloat(prixAchat),
+      prix_vente: parseFloat(prixVente),
+      quantite: parseInt(quantite),
+      seuil_alerte: parseInt(seuilAlerte),
+      boutique_id: boutiqueId,
+    })
 
     if (error) {
       alert('Erreur lors de l\'ajout : ' + error.message)
@@ -102,7 +105,7 @@ function Produits() {
   }
 
   async function supprimerProduit(id, nomProduit) {
-    const confirmation = window.confirm(`Voulez-vous vraiment supprimer "${nomProduit}" ?`)
+    const confirmation = window.confirm('Voulez-vous vraiment supprimer ' + nomProduit + ' ?')
     if (!confirmation) return
 
     const { error } = await supabase.from('products').delete().eq('id', id)
@@ -122,11 +125,11 @@ function Produits() {
         onSubmit={modeEdition ? enregistrerModification : ajouterProduit}
         style={{ marginBottom: '30px', padding: '15px', border: '1px solid #ccc', borderRadius: '8px' }}
       >
-        <h2>{modeEdition ? '✏️ Modifier le produit' : 'Ajouter un produit'}</h2>
+        <h2>{modeEdition ? '✏️ Modifier le produit' : '➕ Ajouter un produit'}</h2>
 
         <div style={{ marginBottom: '10px' }}>
           <label>Nom : </label>
-          <input value={nom} onChange={(e) => setNom(e.target.value)} required />
+          <input value={nom} onChange={(e) => setNom(e.target.value)} />
         </div>
 
         <div style={{ marginBottom: '10px' }}>
@@ -136,17 +139,17 @@ function Produits() {
 
         <div style={{ marginBottom: '10px' }}>
           <label>Prix d'achat (FCFA) : </label>
-          <input type="number" value={prixAchat} onChange={(e) => setPrixAchat(e.target.value)} required />
+          <input type="number" value={prixAchat} onChange={(e) => setPrixAchat(e.target.value)} />
         </div>
 
         <div style={{ marginBottom: '10px' }}>
           <label>Prix de vente (FCFA) : </label>
-          <input type="number" value={prixVente} onChange={(e) => setPrixVente(e.target.value)} required />
+          <input type="number" value={prixVente} onChange={(e) => setPrixVente(e.target.value)} />
         </div>
 
         <div style={{ marginBottom: '10px' }}>
           <label>Quantité : </label>
-          <input type="number" value={quantite} onChange={(e) => setQuantite(e.target.value)} required />
+          <input type="number" value={quantite} onChange={(e) => setQuantite(e.target.value)} />
         </div>
 
         <div style={{ marginBottom: '10px' }}>
@@ -154,10 +157,10 @@ function Produits() {
           <input type="number" value={seuilAlerte} onChange={(e) => setSeuilAlerte(e.target.value)} />
         </div>
 
-        <button type="submit">{modeEdition ? 'Enregistrer les modifications' : 'Ajouter le produit'}</button>
+        <button type="submit">{modeEdition ? 'Enregistrer' : 'Ajouter'}</button>
 
         {modeEdition && (
-          <button type="button" onClick={reinitialiserFormulaire} style={{ marginLeft: '10px' }}>
+          <button type="button" onClick={reinitialiserFormulaire}>
             Annuler
           </button>
         )}
@@ -190,10 +193,10 @@ function Produits() {
                 <td>{p.prix_achat} FCFA</td>
                 <td>{p.prix_vente} FCFA</td>
                 <td>{p.quantite}</td>
-                <td>{p.quantite <= p.seuil_alerte ? '⚠️ Stock faible' : '✅'}</td>
+                <td>{p.quantite <= p.seuil_alerte ? '⚠️' : ''}</td>
                 <td>
-                  <button onClick={() => commencerModification(p)}>✏️ Modifier</button>{' '}
-                  <button onClick={() => supprimerProduit(p.id, p.nom)}>🗑️ Supprimer</button>
+                  <button onClick={() => commencerModification(p)}>Modifier</button>
+                  <button onClick={() => supprimerProduit(p.id, p.nom)}>Supprimer</button>
                 </td>
               </tr>
             ))}

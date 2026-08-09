@@ -14,6 +14,9 @@ function Fournisseurs() {
   const [montantAchat, setMontantAchat] = useState('')
   const [montantPaiement, setMontantPaiement] = useState('')
 
+  const employe = JSON.parse(localStorage.getItem('employeConnecte'))
+  const boutiqueId = employe?.boutique_id
+
   useEffect(() => {
     chargerFournisseurs()
   }, [])
@@ -22,6 +25,7 @@ function Fournisseurs() {
     const { data, error } = await supabase
       .from('fournisseurs')
       .select('*')
+      .eq('boutique_id', boutiqueId)
       .order('nom', { ascending: true })
     if (!error) setFournisseurs(data)
   }
@@ -31,18 +35,17 @@ function Fournisseurs() {
       .from('achats')
       .select('*')
       .eq('fournisseur_id', fournisseurId)
+      .eq('boutique_id', boutiqueId)
       .order('created_at', { ascending: false })
     if (!error) setAchats(data)
   }
 
   async function ajouterFournisseur() {
-    if (!nom) {
-      alert('Le nom est obligatoire')
-      return
-    }
+    if (!nom) return
+
     const { error } = await supabase
       .from('fournisseurs')
-      .insert([{ nom, telephone, adresse }])
+      .insert([{ nom, telephone, adresse, boutique_id: boutiqueId }])
 
     if (error) {
       alert('Erreur : ' + error.message)
@@ -71,8 +74,10 @@ function Fournisseurs() {
         montant_total: Number(montantAchat),
         montant_paye: 0,
         statut: 'en cours',
+        boutique_id: boutiqueId,
       },
     ])
+
     if (error) {
       alert('Erreur : ' + error.message)
       return

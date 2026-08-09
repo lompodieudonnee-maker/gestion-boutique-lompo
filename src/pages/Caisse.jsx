@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 function Caisse() {
+  const employe = JSON.parse(localStorage.getItem('employeConnecte'))
+  const boutiqueId = employe?.boutique_id
+
   const [produits, setProduits] = useState([])
   const [panier, setPanier] = useState([])
   const [remise, setRemise] = useState(0)
@@ -10,7 +13,10 @@ function Caisse() {
   const [venteReussie, setVenteReussie] = useState(false)
 
   async function chargerProduits() {
-    const { data, error } = await supabase.from('products').select('*')
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('boutique_id', boutiqueId)
     if (!error) setProduits(data)
   }
 
@@ -68,7 +74,7 @@ function Caisse() {
 
     const { data: vente, error: erreurVente } = await supabase
       .from('sales')
-      .insert([{ total: totalFinal, mode_paiement: modePaiement, remise: remise }])
+      .insert([{ total: totalFinal, mode_paiement: modePaiement, boutique_id: boutiqueId }])
       .select()
       .single()
 
@@ -83,6 +89,7 @@ function Caisse() {
       nom_produit: item.nom,
       quantite: item.quantiteVente,
       prix_unitaire: item.prix_vente,
+      boutique_id: boutiqueId,
     }))
 
     const { error: erreurItems } = await supabase.from('sale_items').insert(lignes)
@@ -108,10 +115,10 @@ function Caisse() {
 
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
-      <h1>🛒 Caisse</h1>
+      <h1>🧾 Caisse</h1>
 
       {venteReussie && (
-        <div style={{ backgroundColor: '#d4edda', padding: '10px', borderRadius: '8px', marginBottom: '15px' }}>
+        <div style={{ backgroundColor: '#d4edda', padding: '10px', marginBottom: '15px', borderRadius: '6px' }}>
           ✅ Vente enregistrée avec succès !
         </div>
       )}
@@ -136,10 +143,10 @@ function Caisse() {
                   borderRadius: '6px',
                   marginBottom: '8px',
                   cursor: 'pointer',
-                  backgroundColor: p.quantite < 1 ? '#f0f0f0' : 'white',
+                  backgroundColor: p.quantite < 1 ? '#f8d7da' : 'white',
                 }}
               >
-                <strong>{p.nom}</strong> — {p.prix_vente} FCFA
+                <strong>{p.nom}</strong> - {p.prix_vente}
                 <br />
                 <small>Stock : {p.quantite}</small>
               </div>
@@ -175,7 +182,7 @@ function Caisse() {
                     </td>
                     <td>{item.prix_vente * item.quantiteVente} FCFA</td>
                     <td>
-                      <button onClick={() => retirerDuPanier(item.id)}>❌</button>
+                      <button onClick={() => retirerDuPanier(item.id)}>Retirer</button>
                     </td>
                   </tr>
                 ))}
@@ -207,7 +214,7 @@ function Caisse() {
 
           <button
             onClick={validerVente}
-            style={{ padding: '10px 20px', fontSize: '16px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+            style={{ padding: '10px 20px', fontSize: '16px' }}
           >
             ✅ Valider la vente
           </button>
