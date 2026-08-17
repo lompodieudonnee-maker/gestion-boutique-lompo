@@ -15,7 +15,7 @@ import GestionEmployes from './pages/GestionEmployes'
 import Connexion from './pages/Connexion'
 
 function App() {
-  const [pageActive, setPageActive] = useState('tableau')
+  const [pageActive, setPageActive] = useState('tableauDeBord')
   const [menuOuvert, setMenuOuvert] = useState(false)
 
   const [employeConnecte, setEmployeConnecte] = useState(() => {
@@ -41,18 +41,18 @@ function App() {
 
   const classeBouton = (page) => `app-sidebar-bouton${pageActive === page ? ' actif' : ''}`
 
-  const elementsMenu = [
-    { page: 'tableau', icone: '📊', label: 'Tableau de bord' },
-    { page: 'caisse', icone: '🧾', label: 'Vente' },
-    { page: 'produits', icone: '📦', label: 'Produits' },
-    { page: 'inventaire', icone: '📋', label: 'Inventaire' },
-    { page: 'commande', icone: '🛒', label: 'Commande' },
-    { page: 'proforma', icone: '📄', label: 'Proforma' },
-    { page: 'stock', icone: '🗃️', label: 'Stock' },
-    { page: 'clients', icone: '👥', label: 'Clients' },
-    { page: 'fournisseurs', icone: '🚚', label: 'Fournisseurs' },
-    { page: 'depenses', icone: '💰', label: 'Dépenses' },
-  ]
+ const elementsMenu = [
+  { page: 'tableauDeBord', icone: '📊', label: 'Tableau de bord' },
+  { page: 'caisse', icone: '🛒', label: 'Vente' },
+  { page: 'produits', icone: '📦', label: 'Produits' },
+  { page: 'inventaire', icone: '📋', label: 'Inventaire' },
+  { page: 'commande', icone: '📝', label: 'Commande' },
+  { page: 'proforma', icone: '📄', label: 'Proforma' },
+  { page: 'stock', icone: '📊', label: 'Stock' },
+  { page: 'clients', icone: '👥', label: 'Clients' },
+  { page: 'fournisseurs', icone: '🚚', label: 'Fournisseurs' },
+  { page: 'depenses', icone: '💰', label: 'Dépenses' },
+]
 
   return (
     <div className="app-layout">
@@ -101,8 +101,7 @@ function App() {
 
       <div className="app-contenu">
         <AlerteStock pageActive={pageActive} />
-
-        {pageActive === 'tableau' && <TableauDeBord />}
+{pageActive === 'tableauDeBord' && <TableauDeBord setPageActive={setPageActive} />}
         {pageActive === 'caisse' && <Caisse />}
         {pageActive === 'produits' && <Produits />}
         {pageActive === 'inventaire' && <Inventaire />}

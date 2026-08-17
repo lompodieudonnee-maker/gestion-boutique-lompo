@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
-function TableauDeBord() {
+function TableauDeBord({ setPageActive }) {
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
   const boutiqueId = employe?.boutique_id
   const peutVoirFinances = employe?.role === 'proprietaire' || employe?.voir_finances === true
@@ -208,7 +208,28 @@ function TableauDeBord() {
 
   return (
     <div style={{ padding: '20px', fontFamily: 'Poppins, Arial, sans-serif' }}>
-      <h2>📊 Tableau de bord</h2>
+      <button
+  onClick={() => setPageActive('caisse')}
+  style={{
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginTop: '15px',
+    marginBottom: '15px',
+    padding: '14px 20px',
+    borderRadius: '10px',
+    border: 'none',
+    backgroundColor: '#C9822A',
+    color: 'white',
+    fontFamily: 'Poppins, Arial, sans-serif',
+    fontWeight: 600,
+    fontSize: '15px',
+    cursor: 'pointer',
+    boxShadow: '0 2px 8px rgba(43, 38, 32, 0.15)',
+  }}
+>
+  🛒 Nouvelle vente
+</button>
 
       <div style={{ display: 'flex', gap: '6px', marginTop: '15px', marginBottom: '20px', flexWrap: 'wrap' }}>
         {onglets.map((o) => (
@@ -309,7 +330,7 @@ function TableauDeBord() {
 
         {peutVoirFinances && (
           <div style={{ ...styleCarte, backgroundColor: margeBrute >= 0 ? '#EAF5EC' : '#FBEAEA' }}>
-            <div style={styleTitre}>Marge brute</div>
+          <div style={styleTitre}>Bénéfice</div>
             <div style={{ ...styleValeur, color: margeBrute >= 0 ? '#2E7D32' : '#B71C1C' }}>
               {margeBrute.toLocaleString('fr-FR')} FCFA
             </div>
