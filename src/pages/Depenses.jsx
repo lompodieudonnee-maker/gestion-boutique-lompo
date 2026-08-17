@@ -12,6 +12,7 @@ function Depenses() {
 
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
   const boutiqueId = employe?.boutique_id
+  const peutVoirFinances = employe?.role === 'proprietaire' || employe?.voir_finances === true
 
   useEffect(() => {
     chargerDepenses()
@@ -74,56 +75,70 @@ function Depenses() {
   const benefice = totalVentes - totalDepenses - totalAchats
 
   const styleBouton = {
-    padding: '8px 16px',
-    backgroundColor: '#333',
+    padding: '10px 20px',
+    backgroundColor: '#C9822A',
     color: 'white',
     border: 'none',
-    borderRadius: '6px',
+    borderRadius: '8px',
     cursor: 'pointer',
     fontSize: '14px',
+    fontWeight: 500,
+    fontFamily: 'Poppins, Arial, sans-serif',
   }
 
   const styleInput = {
-    padding: '8px',
+    padding: '9px 12px',
     marginRight: '8px',
     marginBottom: '8px',
-    border: '1px solid #ccc',
-    borderRadius: '4px',
+    border: '1px solid #E6E0D6',
+    borderRadius: '6px',
     fontSize: '14px',
+    fontFamily: 'Poppins, Arial, sans-serif',
   }
 
   const styleCarte = {
     flex: 1,
-    padding: '15px',
-    borderRadius: '8px',
-    color: 'white',
-    textAlign: 'center',
+    padding: '18px',
+    borderRadius: '10px',
+    textAlign: 'left',
+    border: '1px solid #E6E0D6',
+    boxShadow: '0 2px 8px rgba(43, 38, 32, 0.06)',
   }
+
+  const styleTitreCarte = { fontSize: '13px', color: '#6B6357', marginBottom: '6px', fontWeight: 500 }
+  const styleValeurCarte = { fontSize: '22px', fontWeight: 700 }
 
   return (
     <div style={{ padding: '20px' }}>
       <h2>💵 Dépenses & Bénéfices</h2>
 
-      <div style={{ display: 'flex', gap: '15px', marginBottom: '25px' }}>
-        <div style={{ ...styleCarte, backgroundColor: '#2e7d32' }}>
-          <div>Total Ventes</div>
-          <div style={{ fontSize: '22px', fontWeight: 'bold' }}>{totalVentes} FCFA</div>
+      {peutVoirFinances ? (
+        <div style={{ display: 'flex', gap: '15px', marginBottom: '25px', flexWrap: 'wrap' }}>
+          <div style={{ ...styleCarte, backgroundColor: '#EAF5EC' }}>
+            <div style={styleTitreCarte}>Total Ventes</div>
+            <div style={{ ...styleValeurCarte, color: '#2E7D32' }}>{totalVentes} FCFA</div>
+          </div>
+          <div style={{ ...styleCarte, backgroundColor: '#FBEAEA' }}>
+            <div style={styleTitreCarte}>Total Dépenses</div>
+            <div style={{ ...styleValeurCarte, color: '#B71C1C' }}>{totalDepenses} FCFA</div>
+          </div>
+          <div style={{ ...styleCarte, backgroundColor: '#FDECE1' }}>
+            <div style={styleTitreCarte}>Total Achats Fournisseurs</div>
+            <div style={{ ...styleValeurCarte, color: '#C9822A' }}>{totalAchats} FCFA</div>
+          </div>
+          <div style={{ ...styleCarte, backgroundColor: benefice >= 0 ? '#EAF5EC' : '#FBEAEA' }}>
+            <div style={styleTitreCarte}>Bénéfice</div>
+            <div style={{ ...styleValeurCarte, color: benefice >= 0 ? '#2E7D32' : '#B71C1C' }}>{benefice} FCFA</div>
+          </div>
         </div>
-        <div style={{ ...styleCarte, backgroundColor: '#c62828' }}>
-          <div>Total Dépenses</div>
-          <div style={{ fontSize: '22px', fontWeight: 'bold' }}>{totalDepenses} FCFA</div>
+      ) : (
+        <div style={{ ...styleCarte, backgroundColor: '#FBEAEA', marginBottom: '25px', maxWidth: '300px' }}>
+          <div style={styleTitreCarte}>Total Dépenses</div>
+          <div style={{ ...styleValeurCarte, color: '#B71C1C' }}>{totalDepenses} FCFA</div>
         </div>
-        <div style={{ ...styleCarte, backgroundColor: '#ef6c00' }}>
-          <div>Total Achats Fournisseurs</div>
-          <div style={{ fontSize: '22px', fontWeight: 'bold' }}>{totalAchats} FCFA</div>
-        </div>
-        <div style={{ ...styleCarte, backgroundColor: benefice >= 0 ? '#1565c0' : '#b71c1c' }}>
-          <div>Bénéfice</div>
-          <div style={{ fontSize: '22px', fontWeight: 'bold' }}>{benefice} FCFA</div>
-        </div>
-      </div>
+      )}
 
-      <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
+      <div style={{ marginBottom: '20px', padding: '18px', backgroundColor: '#FFFFFF', border: '1px solid #E6E0D6', borderRadius: '10px' }}>
         <h4>Ajouter une dépense</h4>
         <input
           style={styleInput}
@@ -154,19 +169,19 @@ function Depenses() {
         <div
           key={d.id}
           style={{
-            padding: '12px',
+            padding: '14px',
             marginBottom: '8px',
-            border: '1px solid #ddd',
-            borderRadius: '8px',
+            border: '1px solid #E6E0D6',
+            borderRadius: '10px',
             backgroundColor: '#fff',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <div>
               <strong>{d.categorie || 'Sans catégorie'}</strong>
-              {d.description && <span> — {d.description}</span>}
+              {d.description && <span style={{ color: '#6B6357' }}> — {d.description}</span>}
             </div>
-            <div style={{ fontWeight: 'bold', color: '#c62828' }}>-{d.montant} FCFA</div>
+            <div style={{ fontWeight: 700, color: '#B71C1C' }}>-{d.montant} FCFA</div>
           </div>
         </div>
       ))}

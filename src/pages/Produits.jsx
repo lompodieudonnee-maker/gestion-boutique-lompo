@@ -117,86 +117,134 @@ function Produits() {
     }
   }
 
+  const styleChamp = { marginBottom: '12px' }
+  const styleInput = {
+    padding: '9px 12px',
+    border: '1px solid #E6E0D6',
+    borderRadius: '8px',
+    fontFamily: 'Poppins, Arial, sans-serif',
+    fontSize: '14px',
+    width: '260px',
+  }
+  const styleBoutonPrimaire = {
+    padding: '10px 20px',
+    backgroundColor: '#C9822A',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontFamily: 'Poppins, Arial, sans-serif',
+    fontWeight: 500,
+    marginRight: '10px',
+  }
+  const styleBoutonSecondaire = {
+    padding: '10px 20px',
+    backgroundColor: 'transparent',
+    color: '#6B6357',
+    border: '1px solid #E6E0D6',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontFamily: 'Poppins, Arial, sans-serif',
+  }
+  const styleBoutonAction = {
+    padding: '6px 12px',
+    border: '1px solid #E6E0D6',
+    borderRadius: '6px',
+    background: 'white',
+    cursor: 'pointer',
+    fontFamily: 'Poppins, Arial, sans-serif',
+    fontSize: '13px',
+    marginRight: '6px',
+  }
+
   return (
-    <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
+    <div style={{ padding: '20px', fontFamily: 'Poppins, Arial, sans-serif' }}>
       <h1>📦 Gestion des Produits</h1>
 
       <form
         onSubmit={modeEdition ? enregistrerModification : ajouterProduit}
-        style={{ marginBottom: '30px', padding: '15px', border: '1px solid #ccc', borderRadius: '8px' }}
+        style={{ marginBottom: '30px', padding: '20px', backgroundColor: 'white', border: '1px solid #E6E0D6', borderRadius: '10px', boxShadow: '0 2px 8px rgba(43, 38, 32, 0.06)' }}
       >
         <h2>{modeEdition ? '✏️ Modifier le produit' : '➕ Ajouter un produit'}</h2>
 
-        <div style={{ marginBottom: '10px' }}>
-          <label>Nom : </label>
-          <input value={nom} onChange={(e) => setNom(e.target.value)} />
+        <div style={styleChamp}>
+          <label>Nom : </label><br />
+          <input style={styleInput} value={nom} onChange={(e) => setNom(e.target.value)} />
         </div>
 
-        <div style={{ marginBottom: '10px' }}>
-          <label>Catégorie : </label>
-          <input value={categorie} onChange={(e) => setCategorie(e.target.value)} />
+        <div style={styleChamp}>
+          <label>Catégorie : </label><br />
+          <input style={styleInput} value={categorie} onChange={(e) => setCategorie(e.target.value)} />
         </div>
 
-        <div style={{ marginBottom: '10px' }}>
-          <label>Prix d'achat (FCFA) : </label>
-          <input type="number" value={prixAchat} onChange={(e) => setPrixAchat(e.target.value)} />
+        <div style={styleChamp}>
+          <label>Prix d'achat (FCFA) : </label><br />
+          <input style={styleInput} type="number" value={prixAchat} onChange={(e) => setPrixAchat(e.target.value)} />
         </div>
 
-        <div style={{ marginBottom: '10px' }}>
-          <label>Prix de vente (FCFA) : </label>
-          <input type="number" value={prixVente} onChange={(e) => setPrixVente(e.target.value)} />
+        <div style={styleChamp}>
+          <label>Prix de vente (FCFA) : </label><br />
+          <input style={styleInput} type="number" value={prixVente} onChange={(e) => setPrixVente(e.target.value)} />
         </div>
 
-        <div style={{ marginBottom: '10px' }}>
-          <label>Quantité : </label>
-          <input type="number" value={quantite} onChange={(e) => setQuantite(e.target.value)} />
+        <div style={styleChamp}>
+          <label>Quantité : </label><br />
+          <input style={styleInput} type="number" value={quantite} onChange={(e) => setQuantite(e.target.value)} />
         </div>
 
-        <div style={{ marginBottom: '10px' }}>
-          <label>Seuil d'alerte : </label>
-          <input type="number" value={seuilAlerte} onChange={(e) => setSeuilAlerte(e.target.value)} />
+        <div style={styleChamp}>
+          <label>Seuil d'alerte : </label><br />
+          <input style={styleInput} type="number" value={seuilAlerte} onChange={(e) => setSeuilAlerte(e.target.value)} />
         </div>
 
-        <button type="submit">{modeEdition ? 'Enregistrer' : 'Ajouter'}</button>
+        <button type="submit" style={styleBoutonPrimaire}>{modeEdition ? 'Enregistrer' : 'Ajouter'}</button>
 
         {modeEdition && (
-          <button type="button" onClick={reinitialiserFormulaire}>
+          <button type="button" onClick={reinitialiserFormulaire} style={styleBoutonSecondaire}>
             Annuler
           </button>
         )}
       </form>
 
       <h2>Liste des produits</h2>
+  
+<p style={{ fontSize: '15px', fontWeight: 600, color: '#2B2620', marginBottom: '16px' }}>
+  Bénéfice total du stock : {produits.reduce((total, p) => total + (p.prix_vente - p.prix_achat) * p.quantite, 0).toLocaleString()} FCFA
+</p>
 
       {chargement ? (
-        <p>Chargement...</p>
+        <p style={{ color: '#6B6357' }}>Chargement...</p>
       ) : produits.length === 0 ? (
-        <p>Aucun produit pour le moment.</p>
+        <p style={{ color: '#6B6357' }}>Aucun produit pour le moment.</p>
       ) : (
-        <table border="1" cellPadding="8" style={{ borderCollapse: 'collapse', width: '100%' }}>
+        <table cellPadding="10" style={{ borderCollapse: 'collapse', width: '100%', backgroundColor: 'white', border: '1px solid #E6E0D6', borderRadius: '10px', overflow: 'hidden' }}>
           <thead>
-            <tr>
-              <th>Nom</th>
-              <th>Catégorie</th>
-              <th>Prix d'achat</th>
-              <th>Prix de vente</th>
-              <th>Quantité</th>
-              <th>Alerte</th>
-              <th>Actions</th>
+            <tr style={{ backgroundColor: '#F7F5F2' }}>
+              <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Nom</th>
+              <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Catégorie</th>
+              <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Prix d'achat</th>
+              <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Prix de vente</th>
+              <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Quantité</th>
+              <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Bénéfice unit.</th>
+              <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Bénéfice total</th>
+              <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Alerte</th>
+              <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {produits.map((p) => (
-              <tr key={p.id} style={{ backgroundColor: p.quantite <= p.seuil_alerte ? '#ffe0e0' : 'white' }}>
+              <tr key={p.id} style={{ backgroundColor: p.quantite <= p.seuil_alerte ? '#FDECE1' : 'white', borderTop: '1px solid #E6E0D6' }}>
                 <td>{p.nom}</td>
                 <td>{p.categorie}</td>
                 <td>{p.prix_achat} FCFA</td>
                 <td>{p.prix_vente} FCFA</td>
                 <td>{p.quantite}</td>
+                <td>{(p.prix_vente - p.prix_achat).toLocaleString()} FCFA</td>
+                <td>{((p.prix_vente - p.prix_achat) * p.quantite).toLocaleString()} FCFA</td>
                 <td>{p.quantite <= p.seuil_alerte ? '⚠️' : ''}</td>
                 <td>
-                  <button onClick={() => commencerModification(p)}>Modifier</button>
-                  <button onClick={() => supprimerProduit(p.id, p.nom)}>Supprimer</button>
+                  <button style={styleBoutonAction} onClick={() => commencerModification(p)}>Modifier</button>
+                  <button style={{ ...styleBoutonAction, color: '#B71C1C' }} onClick={() => supprimerProduit(p.id, p.nom)}>Supprimer</button>
                 </td>
               </tr>
             ))}

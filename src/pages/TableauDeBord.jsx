@@ -2,101 +2,183 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 function TableauDeBord() {
-  const [nbProduits, setNbProduits] = useState(0)
-  const [produitsAlerte, setProduitsAlerte] = useState(0)
-  const [totalVentesJour, setTotalVentesJour] = useState(0)
-  const [nbClients, setNbClients] = useState(0)
-  const [totalCreances, setTotalCreances] = useState(0)
-  const [nbFournisseurs, setNbFournisseurs] = useState(0)
-  const [totalDettes, setTotalDettes] = useState(0)
-  const [benefice, setBenefice] = useState(0)
-  const [chargement, setChargement] = useState(true)
-
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
   const boutiqueId = employe?.boutique_id
+  const peutVoirFinances = employe?.role === 'proprietaire' || employe?.voir_finances === true
+
+  const [ongletPeriode, setOngletPeriode] = useState('aujourdhui')
+  const [chargement, setChargement] = useState(true)
+
+  const [chiffreAffaires, setChiffreAffaires] = useState(0)
+  const [totalCash, setTotalCash] = useState(0)
+  const [totalMobile, setTotalMobile] = useState(0)
+  const [encaissement, setEncaissement] = useState(0)
+  const [margeBrute, setMargeBrute] = useState(0)
+  const [creditsPayes, setCreditsPayes] = useState(0)
+  const [dettesClients, setDettesClients] = useState(0)
+
+  const [nbProduits, setNbProduits] = useState(0)
+  const [produitsAlerte, setProduitsAlerte] = useState(0)
+  const [nbClients, setNbClients] = useState(0)
+  const [nbFournisseurs, setNbFournisseurs] = useState(0)
+  const [dettesFournisseurs, setDettesFournisseurs] = useState(0)
+  const [employesListe, setEmployesListe] = useState([])
+  const [employePerso, setEmployePerso] = useState(employe?.id || '')
+  const [dateDebutPerso, setDateDebutPerso] = useState('')
+  const [dateFinPerso, setDateFinPerso] = useState('')
 
   useEffect(() => {
     chargerDonnees()
-  }, [])
+  }, [ongletPeriode, employePerso, dateDebutPerso, dateFinPerso])
+
+  function bornesPeriode() {
+    const maintenant = new Date()
+
+    if (ongletPeriode === 'aujourdhui') {
+      const debut = new Date()
+      debut.setHours(0, 0, 0, 0)
+      return { debut, fin: maintenant, filtrerParDate: true }
+    }
+
+    if (ongletPeriode === 'semaine') {
+      const debut = new Date()
+      const jourSemaine = debut.getDay() === 0 ? 7 : debut.getDay() // lundi = 1 ... dimanche = 7
+      debut.setDate(debut.getDate() - (jourSemaine - 1))
+      debut.setHours(0, 0, 0, 0)
+      return { debut, fin: maintenant, filtrerParDate: true }
+    }
+
+    if (ongletPeriode === 'mois') {
+      const debut = new Date(maintenant.getFullYear(), maintenant.getMonth(), 1)
+      debut.setHours(0, 0, 0, 0)
+      return { debut, fin: maintenant, filtrerParDate: true }
+    }
+
+    if (ongletPeriode === 'perso' && dateDebutPerso && dateFinPerso) {
+      const debut = new Date(dateDebutPerso)
+      debut.setHours(0, 0, 0, 0)
+      const fin = new Date(dateFinPerso)
+      fin.setHours(23, 59, 59, 999)
+      return { debut, fin, filtrerParDate: true }
+    }
+
+    // 'perso' (sans dates choisies) et 'total' : pas de filtre de date
+    return { debut: null, fin: null, filtrerParDate: false }
+  }
 
   async function chargerDonnees() {
     setChargement(true)
 
-    // Produits
-    const { data: produits } = await supabase
-      .from('products')
-      .select('quantite, seuil_alerte')
+    const { debut, fin, filtrerParDate } = bornesPeriode()
+    const filtrerParEmploye = ongletPeriode === 'perso'
+    const idEmployeCible = peutVoirFinances ? (employePerso || employe?.id) : employe?.id
+
+    // --- Ventes ---
+    let requeteVentes = supabase.from('sales').select('total, mode_paiement, created_at, employe_id').eq('boutique_id', boutiqueId)
+    if (filtrerParEmploye) requeteVentes = requeteVentes.eq('employe_id', idEmployeCible)
+    const { data: ventes } = await requeteVentes
+
+    const ventesFiltrees = filtrerParDate
+      ? (ventes || []).filter((v) => new Date(v.created_at) >= debut && new Date(v.created_at) <= fin)
+      : (ventes || [])
+
+    const ca = ventesFiltrees.reduce((s, v) => s + Number(v.total || 0), 0)
+    const cash = ventesFiltrees
+      .filter((v) => v.mode_paiement === 'Espèces')
+      .reduce((s, v) => s + Number(v.total || 0), 0)
+    const mobile = ventesFiltrees
+      .filter((v) => v.mode_paiement === 'Orange Money' || v.mode_paiement === 'Moov Money')
+      .reduce((s, v) => s + Number(v.total || 0), 0)
+
+    setChiffreAffaires(ca)
+    setTotalCash(cash)
+    setTotalMobile(mobile)
+    setEncaissement(cash + mobile)
+
+    // --- Dépenses ---
+    let requeteDepenses = supabase.from('depenses').select('montant, created_at').eq('boutique_id', boutiqueId)
+    const { data: depenses } = await requeteDepenses
+    const depensesFiltrees = filtrerParDate
+      ? (depenses || []).filter((d) => new Date(d.created_at) >= debut && new Date(d.created_at) <= fin)
+      : (depenses || [])
+    const totalDepenses = depensesFiltrees.reduce((s, d) => s + Number(d.montant || 0), 0)
+
+    // --- Achats fournisseurs ---
+    const { data: achats } = await supabase
+      .from('achats')
+      .select('montant_total, montant_paye, created_at, date_achat')
       .eq('boutique_id', boutiqueId)
-    if (produits) {
-      setNbProduits(produits.length)
-      const alertes = produits.filter((p) => Number(p.quantite) <= Number(p.seuil_alerte)).length
-      setProduitsAlerte(alertes)
-    }
+    const achatsFiltres = filtrerParDate
+      ? (achats || []).filter((a) => {
+          const dateA = new Date(a.date_achat || a.created_at)
+          return dateA >= debut && dateA <= fin
+        })
+      : (achats || [])
+    const totalAchats = achatsFiltres.reduce((s, a) => s + Number(a.montant_total || 0), 0)
 
-    // Ventes du jour
-    const debutJour = new Date()
-    debutJour.setHours(0, 0, 0, 0)
-    const { data: ventes } = await supabase
-      .from('sales')
-      .select('total, created_at')
-      .eq('boutique_id', boutiqueId)
-    if (ventes) {
-      const ventesJour = ventes.filter((v) => new Date(v.created_at) >= debutJour)
-      const totalJour = ventesJour.reduce((s, v) => s + Number(v.total || 0), 0)
-      setTotalVentesJour(totalJour)
+    setMargeBrute(ca - totalDepenses - totalAchats)
 
-      const totalVentesGlobal = ventes.reduce((s, v) => s + Number(v.total || 0), 0)
+    // Dettes fournisseurs (toujours globales)
+    const dettesF = (achats || []).reduce(
+      (s, a) => s + (Number(a.montant_total) - Number(a.montant_paye)),
+      0
+    )
+    setDettesFournisseurs(dettesF)
 
-      // Dépenses
-      const { data: depenses } = await supabase
-        .from('depenses')
-        .select('montant')
-        .eq('boutique_id', boutiqueId)
-      const totalDepenses = depenses ? depenses.reduce((s, d) => s + Number(d.montant || 0), 0) : 0
-
-      // Achats fournisseurs
-      const { data: achats } = await supabase
-        .from('achats')
-        .select('montant_total')
-        .eq('boutique_id', boutiqueId)
-      const totalAchats = achats ? achats.reduce((s, a) => s + Number(a.montant_total || 0), 0) : 0
-
-      setBenefice(totalVentesGlobal - totalDepenses - totalAchats)
-
-      // Dettes fournisseurs (reste à payer sur achats non soldés)
-      const { data: achatsDetail } = await supabase
-        .from('achats')
-        .select('montant_total, montant_paye')
-        .eq('boutique_id', boutiqueId)
-      const dettes = achatsDetail
-        ? achatsDetail.reduce((s, a) => s + (Number(a.montant_total) - Number(a.montant_paye)), 0)
-        : 0
-      setTotalDettes(dettes)
-    }
-
-    // Clients
-    const { data: clients } = await supabase
-      .from('clients')
-      .select('id')
-      .eq('boutique_id', boutiqueId)
-    if (clients) setNbClients(clients.length)
-
-    // Créances (reste à payer sur crédits non soldés)
+    // --- Crédits clients (toujours globaux, pas de date de paiement en base) ---
     const { data: credits } = await supabase
       .from('credits')
       .select('montant_total, montant_paye')
       .eq('boutique_id', boutiqueId)
     if (credits) {
-      const creances = credits.reduce((s, c) => s + (Number(c.montant_total) - Number(c.montant_paye)), 0)
-      setTotalCreances(creances)
+      setCreditsPayes(credits.reduce((s, c) => s + Number(c.montant_paye || 0), 0))
+      setDettesClients(
+        credits.reduce((s, c) => s + (Number(c.montant_total) - Number(c.montant_paye)), 0)
+      )
     }
 
-    // Fournisseurs
-    const { data: fournisseurs } = await supabase
+    // --- Produits / alertes (toujours globaux) ---
+    const { data: produits } = await supabase
+      .from('products')
+      .select('id, seuil_alerte')
+      .eq('boutique_id', boutiqueId)
+    const { data: mouvementsStock } = await supabase
+      .from('stock_mouvements')
+      .select('produit_id, quantite')
+      .eq('boutique_id', boutiqueId)
+
+    if (produits && mouvementsStock) {
+      setNbProduits(produits.length)
+
+      function quantiteActuelle(idProduit) {
+        return mouvementsStock
+          .filter((m) => String(m.produit_id) === String(idProduit))
+          .reduce((total, m) => total + Number(m.quantite), 0)
+      }
+
+      const alertes = produits.filter(
+        (p) => p.seuil_alerte != null && quantiteActuelle(p.id) <= Number(p.seuil_alerte)
+      ).length
+      setProduitsAlerte(alertes)
+    }
+
+    // --- Clients / Fournisseurs (comptages globaux) ---
+    const { data: clientsData } = await supabase.from('clients').select('id').eq('boutique_id', boutiqueId)
+    if (clientsData) setNbClients(clientsData.length)
+
+    const { data: fournisseursData } = await supabase
       .from('fournisseurs')
       .select('id')
       .eq('boutique_id', boutiqueId)
-    if (fournisseurs) setNbFournisseurs(fournisseurs.length)
+    if (fournisseursData) setNbFournisseurs(fournisseursData.length)
+
+    if (peutVoirFinances) {
+      const { data: employesData } = await supabase
+        .from('employes')
+        .select('id, nom')
+        .eq('boutique_id', boutiqueId)
+      setEmployesListe(employesData || [])
+    }
 
     setChargement(false)
   }
@@ -105,50 +187,187 @@ function TableauDeBord() {
     flex: '1 1 200px',
     padding: '20px',
     borderRadius: '10px',
-    color: 'white',
-    textAlign: 'center',
+    textAlign: 'left',
+    border: '1px solid #E6E0D6',
+    boxShadow: '0 2px 8px rgba(43, 38, 32, 0.06)',
   }
+  const styleTitre = { fontSize: '13px', color: '#6B6357', marginBottom: '6px', fontWeight: 500 }
+  const styleValeur = { fontSize: '22px', fontWeight: 700 }
 
-  const styleTitre = { fontSize: '14px', opacity: 0.9, marginBottom: '6px' }
-  const styleValeur = { fontSize: '26px', fontWeight: 'bold' }
+  const onglets = [
+    { id: 'aujourdhui', label: "Aujourd'hui" },
+    { id: 'semaine', label: 'Semaine' },
+    { id: 'mois', label: 'Mois' },
+    { id: 'perso', label: 'Perso' },
+    { id: 'total', label: 'Total' },
+  ]
 
   if (chargement) {
     return <div style={{ padding: '20px' }}>Chargement du tableau de bord...</div>
   }
 
   return (
-    <div style={{ padding: '20px' }}>
+    <div style={{ padding: '20px', fontFamily: 'Poppins, Arial, sans-serif' }}>
       <h2>📊 Tableau de bord</h2>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', marginTop: '20px' }}>
-        <div style={{ ...styleCarte, backgroundColor: '#2e7d32' }}>
-          <div style={styleTitre}>Ventes du jour</div>
-          <div style={styleValeur}>{totalVentesJour} FCFA</div>
+      <div style={{ display: 'flex', gap: '6px', marginTop: '15px', marginBottom: '20px', flexWrap: 'wrap' }}>
+        {onglets.map((o) => (
+          <button
+            key={o.id}
+            onClick={() => setOngletPeriode(o.id)}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '8px',
+              border: '1px solid #E6E0D6',
+              backgroundColor: ongletPeriode === o.id ? '#C9822A' : 'white',
+              color: ongletPeriode === o.id ? 'white' : '#6B6357',
+              cursor: 'pointer',
+              fontFamily: 'Poppins, Arial, sans-serif',
+              fontWeight: 500,
+              fontSize: '14px',
+            }}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+
+      {ongletPeriode === 'perso' && (
+        <div
+          style={{
+            display: 'flex',
+            gap: '12px',
+            alignItems: 'flex-end',
+            flexWrap: 'wrap',
+            backgroundColor: 'white',
+            border: '1px solid #E6E0D6',
+            borderRadius: '10px',
+            padding: '14px 16px',
+            marginBottom: '20px',
+          }}
+        >
+          {peutVoirFinances && (
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', color: '#6B6357', marginBottom: '4px' }}>Employé</label>
+              <select
+                value={employePerso}
+                onChange={(e) => setEmployePerso(e.target.value)}
+                style={{ padding: '8px 10px', border: '1px solid #E6E0D6', borderRadius: '6px', fontFamily: 'Poppins, Arial, sans-serif' }}
+              >
+                {employesListe.map((e) => (
+                  <option key={e.id} value={e.id}>{e.nom}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', color: '#6B6357', marginBottom: '4px' }}>Du</label>
+            <input
+              type="date"
+              value={dateDebutPerso}
+              onChange={(e) => setDateDebutPerso(e.target.value)}
+              style={{ padding: '7px 10px', border: '1px solid #E6E0D6', borderRadius: '6px', fontFamily: 'Poppins, Arial, sans-serif' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', color: '#6B6357', marginBottom: '4px' }}>Au</label>
+            <input
+              type="date"
+              value={dateFinPerso}
+              onChange={(e) => setDateFinPerso(e.target.value)}
+              style={{ padding: '7px 10px', border: '1px solid #E6E0D6', borderRadius: '6px', fontFamily: 'Poppins, Arial, sans-serif' }}
+            />
+          </div>
+
+          {(dateDebutPerso || dateFinPerso) && (
+            <button
+              onClick={() => { setDateDebutPerso(''); setDateFinPerso('') }}
+              style={{
+                padding: '8px 14px',
+                border: '1px solid #E6E0D6',
+                borderRadius: '6px',
+                background: 'white',
+                color: '#6B6357',
+                cursor: 'pointer',
+                fontFamily: 'Poppins, Arial, sans-serif',
+                fontSize: '13px',
+              }}
+            >
+              Effacer les dates
+            </button>
+          )}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px' }}>
+        <div style={{ ...styleCarte, backgroundColor: '#EAF5EC' }}>
+          <div style={styleTitre}>Chiffre d'affaires</div>
+          <div style={{ ...styleValeur, color: '#2E7D32' }}>{chiffreAffaires.toLocaleString('fr-FR')} FCFA</div>
         </div>
 
-        <div style={{ ...styleCarte, backgroundColor: benefice >= 0 ? '#1565c0' : '#b71c1c' }}>
-          <div style={styleTitre}>Bénéfice global</div>
-          <div style={styleValeur}>{benefice} FCFA</div>
+        {peutVoirFinances && (
+          <div style={{ ...styleCarte, backgroundColor: margeBrute >= 0 ? '#EAF5EC' : '#FBEAEA' }}>
+            <div style={styleTitre}>Marge brute</div>
+            <div style={{ ...styleValeur, color: margeBrute >= 0 ? '#2E7D32' : '#B71C1C' }}>
+              {margeBrute.toLocaleString('fr-FR')} FCFA
+            </div>
+          </div>
+        )}
+
+        <div style={{ ...styleCarte, backgroundColor: '#F3E2CB' }}>
+          <div style={styleTitre}>Encaissement</div>
+          <div style={{ ...styleValeur, color: '#A6691F' }}>{encaissement.toLocaleString('fr-FR')} FCFA</div>
         </div>
 
-        <div style={{ ...styleCarte, backgroundColor: produitsAlerte > 0 ? '#e65100' : '#455a64' }}>
+        <div style={{ ...styleCarte, backgroundColor: '#EDF1F5' }}>
+          <div style={styleTitre}>Total Cash</div>
+          <div style={{ ...styleValeur, color: '#37474F' }}>{totalCash.toLocaleString('fr-FR')} FCFA</div>
+        </div>
+
+        <div style={{ ...styleCarte, backgroundColor: '#EDF1F5' }}>
+          <div style={styleTitre}>Total Mobile</div>
+          <div style={{ ...styleValeur, color: '#37474F' }}>{totalMobile.toLocaleString('fr-FR')} FCFA</div>
+        </div>
+
+        {peutVoirFinances && (
+          <>
+            <div style={{ ...styleCarte, backgroundColor: '#E3F2E5' }}>
+              <div style={styleTitre}>Crédits payés</div>
+              <div style={{ ...styleValeur, color: '#2E7D32' }}>{creditsPayes.toLocaleString('fr-FR')} FCFA</div>
+            </div>
+
+            <div style={{ ...styleCarte, backgroundColor: dettesClients > 0 ? '#FCE4E4' : '#F2F1EE' }}>
+              <div style={styleTitre}>Dettes clients</div>
+              <div style={{ ...styleValeur, color: dettesClients > 0 ? '#C62828' : '#2B2620' }}>
+                {dettesClients.toLocaleString('fr-FR')} FCFA
+              </div>
+            </div>
+          </>
+        )}
+
+        <div style={{ ...styleCarte, backgroundColor: produitsAlerte > 0 ? '#FDECE1' : '#F2F1EE' }}>
           <div style={styleTitre}>Produits en stock</div>
-          <div style={styleValeur}>{nbProduits}</div>
+          <div style={{ ...styleValeur, color: produitsAlerte > 0 ? '#C9822A' : '#2B2620' }}>{nbProduits}</div>
           {produitsAlerte > 0 && (
-            <div style={{ fontSize: '13px', marginTop: '4px' }}>⚠️ {produitsAlerte} en alerte stock</div>
+            <div style={{ fontSize: '13px', marginTop: '4px', color: '#C9822A' }}>⚠️ {produitsAlerte} en alerte stock</div>
           )}
         </div>
 
-        <div style={{ ...styleCarte, backgroundColor: '#6a1b9a' }}>
+        <div style={{ ...styleCarte, backgroundColor: '#F3E2CB' }}>
           <div style={styleTitre}>Clients</div>
-          <div style={styleValeur}>{nbClients}</div>
-          <div style={{ fontSize: '13px', marginTop: '4px' }}>Créances : {totalCreances} FCFA</div>
+          <div style={{ ...styleValeur, color: '#A6691F' }}>{nbClients}</div>
         </div>
 
-        <div style={{ ...styleCarte, backgroundColor: '#00838f' }}>
+        <div style={{ ...styleCarte, backgroundColor: '#EDF1F5' }}>
           <div style={styleTitre}>Fournisseurs</div>
-          <div style={styleValeur}>{nbFournisseurs}</div>
-          <div style={{ fontSize: '13px', marginTop: '4px' }}>Dettes : {totalDettes} FCFA</div>
+          <div style={{ ...styleValeur, color: '#37474F' }}>{nbFournisseurs}</div>
+          {peutVoirFinances && (
+            <div style={{ fontSize: '13px', marginTop: '4px', color: '#6B6357' }}>
+              Dettes : {dettesFournisseurs.toLocaleString('fr-FR')} FCFA
+            </div>
+          )}
         </div>
       </div>
     </div>

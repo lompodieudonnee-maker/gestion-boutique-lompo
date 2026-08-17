@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
@@ -106,31 +107,43 @@ function Clients() {
   }
 
   const styleBouton = {
-    padding: '8px 16px',
-    backgroundColor: '#333',
+    padding: '9px 16px',
+    backgroundColor: '#C9822A',
     color: 'white',
     border: 'none',
-    borderRadius: '6px',
+    borderRadius: '8px',
     cursor: 'pointer',
     fontSize: '14px',
+    fontWeight: 500,
+    fontFamily: 'Poppins, Arial, sans-serif',
   }
 
   const styleInput = {
-    padding: '8px',
+    padding: '9px 12px',
     marginRight: '8px',
     marginBottom: '8px',
-    border: '1px solid #ccc',
-    borderRadius: '4px',
+    border: '1px solid #E6E0D6',
+    borderRadius: '8px',
     fontSize: '14px',
+    fontFamily: 'Poppins, Arial, sans-serif',
+  }
+
+  const styleCarteFormulaire = {
+    marginBottom: '20px',
+    padding: '18px',
+    backgroundColor: 'white',
+    border: '1px solid #E6E0D6',
+    borderRadius: '10px',
+    boxShadow: '0 2px 8px rgba(43, 38, 32, 0.06)',
   }
 
   return (
-    <div style={{ display: 'flex', padding: '20px', gap: '30px' }}>
+    <div style={{ display: 'flex', padding: '20px', gap: '30px', fontFamily: 'Poppins, Arial, sans-serif' }}>
       {/* Colonne gauche : liste des clients */}
       <div style={{ flex: 1 }}>
         <h2>👥 Clients</h2>
 
-        <div style={{ marginBottom: '20px', padding: '15px', border: '1px solid #ccc', borderRadius: '8px' }}>
+        <div style={styleCarteFormulaire}>
           <h4>Ajouter un client</h4>
           <input style={styleInput} placeholder="Nom" value={nom} onChange={(e) => setNom(e.target.value)} />
           <input style={styleInput} placeholder="Téléphone" value={telephone} onChange={(e) => setTelephone(e.target.value)} />
@@ -145,16 +158,19 @@ function Clients() {
               key={client.id}
               onClick={() => selectionnerClient(client)}
               style={{
-                padding: '10px',
-                marginBottom: '6px',
-                backgroundColor: clientSelectionne?.id === client.id ? '#333' : '#f5f5f5',
-                color: clientSelectionne?.id === client.id ? 'white' : 'black',
-                borderRadius: '6px',
+                padding: '12px',
+                marginBottom: '8px',
+                backgroundColor: clientSelectionne?.id === client.id ? '#C9822A' : 'white',
+                color: clientSelectionne?.id === client.id ? 'white' : '#2B2620',
+                border: '1px solid #E6E0D6',
+                borderRadius: '8px',
                 cursor: 'pointer',
               }}
             >
               <strong>{client.nom}</strong>
-              {client.telephone && <div style={{ fontSize: '13px' }}>{client.telephone}</div>}
+              {client.telephone && (
+                <div style={{ fontSize: '13px', opacity: 0.85 }}>{client.telephone}</div>
+              )}
             </div>
           ))}
         </div>
@@ -162,13 +178,13 @@ function Clients() {
 
       {/* Colonne droite : crédits du client sélectionné */}
       <div style={{ flex: 2 }}>
-        {!clientSelectionne && <p>Sélectionnez un client pour voir ses crédits.</p>}
+        {!clientSelectionne && <p style={{ color: '#6B6357' }}>Sélectionnez un client pour voir ses crédits.</p>}
 
         {clientSelectionne && (
           <>
             <h2>💰 Crédits de {clientSelectionne.nom}</h2>
 
-            <div style={{ marginBottom: '20px', padding: '15px', border: '1px solid #ccc', borderRadius: '8px' }}>
+            <div style={styleCarteFormulaire}>
               <h4>Nouveau crédit</h4>
               <input
                 style={styleInput}
@@ -180,7 +196,7 @@ function Clients() {
               <button style={styleBouton} onClick={ajouterCredit}>Ajouter</button>
             </div>
 
-            {credits.length === 0 && <p>Aucun crédit pour ce client.</p>}
+            {credits.length === 0 && <p style={{ color: '#6B6357' }}>Aucun crédit pour ce client.</p>}
 
             {credits.map((credit) => {
               const resteAPayer = Number(credit.montant_total) - Number(credit.montant_paye)
@@ -188,11 +204,11 @@ function Clients() {
                 <div
                   key={credit.id}
                   style={{
-                    padding: '12px',
+                    padding: '14px',
                     marginBottom: '10px',
-                    border: '1px solid #ddd',
-                    borderRadius: '8px',
-                    backgroundColor: credit.statut === 'solde' ? '#d4edda' : '#fff3cd',
+                    border: '1px solid #E6E0D6',
+                    borderRadius: '10px',
+                    backgroundColor: credit.statut === 'solde' ? '#EAF5EC' : '#FDECE1',
                   }}
                 >
                   <div>Montant total : <strong>{credit.montant_total}</strong> FCFA</div>

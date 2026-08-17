@@ -14,11 +14,16 @@ function Fournisseurs() {
   const [montantAchat, setMontantAchat] = useState('')
   const [montantPaiement, setMontantPaiement] = useState('')
 
+  const [produits, setProduits] = useState([])
+  const [produitAchatId, setProduitAchatId] = useState('')
+  const [quantiteAchat, setQuantiteAchat] = useState('')
+
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
   const boutiqueId = employe?.boutique_id
 
   useEffect(() => {
     chargerFournisseurs()
+    chargerProduits()
   }, [])
 
   async function chargerFournisseurs() {
@@ -28,6 +33,15 @@ function Fournisseurs() {
       .eq('boutique_id', boutiqueId)
       .order('nom', { ascending: true })
     if (!error) setFournisseurs(data)
+  }
+
+  async function chargerProduits() {
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, nom')
+      .eq('boutique_id', boutiqueId)
+      .order('nom', { ascending: true })
+    if (!error) setProduits(data)
   }
 
   async function chargerAchats(fournisseurId) {
@@ -67,6 +81,11 @@ function Fournisseurs() {
       alert('Entrez un montant valide')
       return
     }
+    if (!produitAchatId || !quantiteAchat || Number(quantiteAchat) <= 0) {
+      alert('Sélectionnez un produit et une quantité valide')
+      return
+    }
+
     const { error } = await supabase.from('achats').insert([
       {
         fournisseur_id: fournisseurSelectionne.id,
@@ -75,6 +94,8 @@ function Fournisseurs() {
         montant_paye: 0,
         statut: 'en cours',
         boutique_id: boutiqueId,
+        produit_id: produitAchatId,
+        quantite: Number(quantiteAchat),
       },
     ])
 
@@ -82,8 +103,20 @@ function Fournisseurs() {
       alert('Erreur : ' + error.message)
       return
     }
+
+    await supabase.from('stock_mouvements').insert({
+      boutique_id: boutiqueId,
+      produit_id: produitAchatId,
+      employe_id: employe?.id,
+      type_mouvement: 'Entrée',
+      quantite: Number(quantiteAchat),
+      motif: `Achat fournisseur : ${fournisseurSelectionne.nom}`,
+    })
+
     setDescriptionAchat('')
     setMontantAchat('')
+    setProduitAchatId('')
+    setQuantiteAchat('')
     chargerAchats(fournisseurSelectionne.id)
   }
 
@@ -109,31 +142,42 @@ function Fournisseurs() {
   }
 
   const styleBouton = {
-    padding: '8px 16px',
-    backgroundColor: '#333',
+    padding: '9px 16px',
+    backgroundColor: '#C9822A',
     color: 'white',
     border: 'none',
-    borderRadius: '6px',
+    borderRadius: '8px',
     cursor: 'pointer',
     fontSize: '14px',
+    fontWeight: 500,
+    fontFamily: 'Poppins, Arial, sans-serif',
   }
 
   const styleInput = {
-    padding: '8px',
+    padding: '9px 12px',
     marginRight: '8px',
     marginBottom: '8px',
-    border: '1px solid #ccc',
-    borderRadius: '4px',
+    border: '1px solid #E6E0D6',
+    borderRadius: '8px',
     fontSize: '14px',
+    fontFamily: 'Poppins, Arial, sans-serif',
+  }
+
+  const styleCarteFormulaire = {
+    marginBottom: '20px',
+    padding: '18px',
+    backgroundColor: 'white',
+    border: '1px solid #E6E0D6',
+    borderRadius: '10px',
+    boxShadow: '0 2px 8px rgba(43, 38, 32, 0.06)',
   }
 
   return (
-    <div style={{ display: 'flex', padding: '20px', gap: '30px' }}>
-      {/* Colonne gauche : liste des fournisseurs */}
+    <div style={{ display: 'flex', padding: '20px', gap: '30px', fontFamily: 'Poppins, Arial, sans-serif' }}>
       <div style={{ flex: 1 }}>
         <h2>🚚 Fournisseurs</h2>
 
-        <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
+        <div style={styleCarteFormulaire}>
           <h4>Ajouter un fournisseur</h4>
           <input style={styleInput} placeholder="Nom" value={nom} onChange={(e) => setNom(e.target.value)} />
           <input style={styleInput} placeholder="Téléphone" value={telephone} onChange={(e) => setTelephone(e.target.value)} />
@@ -148,30 +192,32 @@ function Fournisseurs() {
               key={fournisseur.id}
               onClick={() => selectionnerFournisseur(fournisseur)}
               style={{
-                padding: '10px',
-                marginBottom: '6px',
-                backgroundColor: fournisseurSelectionne?.id === fournisseur.id ? '#333' : '#eee',
-                color: fournisseurSelectionne?.id === fournisseur.id ? 'white' : 'black',
-                borderRadius: '6px',
+                padding: '12px',
+                marginBottom: '8px',
+                backgroundColor: fournisseurSelectionne?.id === fournisseur.id ? '#C9822A' : 'white',
+                color: fournisseurSelectionne?.id === fournisseur.id ? 'white' : '#2B2620',
+                border: '1px solid #E6E0D6',
+                borderRadius: '8px',
                 cursor: 'pointer',
               }}
             >
               <strong>{fournisseur.nom}</strong>
-              {fournisseur.telephone && <div style={{ fontSize: '13px' }}>{fournisseur.telephone}</div>}
+              {fournisseur.telephone && (
+                <div style={{ fontSize: '13px', opacity: 0.85 }}>{fournisseur.telephone}</div>
+              )}
             </div>
           ))}
         </div>
       </div>
 
-      {/* Colonne droite : achats du fournisseur sélectionné */}
       <div style={{ flex: 2 }}>
-        {!fournisseurSelectionne && <p>Sélectionnez un fournisseur pour voir ses achats.</p>}
+        {!fournisseurSelectionne && <p style={{ color: '#6B6357' }}>Sélectionnez un fournisseur pour voir ses achats.</p>}
 
         {fournisseurSelectionne && (
           <>
             <h2>📦 Achats chez {fournisseurSelectionne.nom}</h2>
 
-            <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
+            <div style={styleCarteFormulaire}>
               <h4>Nouvel achat</h4>
               <input
                 style={styleInput}
@@ -186,10 +232,28 @@ function Fournisseurs() {
                 value={montantAchat}
                 onChange={(e) => setMontantAchat(e.target.value)}
               />
+              <select
+                style={styleInput}
+                value={produitAchatId}
+                onChange={(e) => setProduitAchatId(e.target.value)}
+              >
+                <option value="">-- Choisir un produit --</option>
+                {produits.map((p) => (
+                  <option key={p.id} value={p.id}>{p.nom}</option>
+                ))}
+              </select>
+              <input
+                style={styleInput}
+                placeholder="Quantité achetée"
+                type="number"
+                value={quantiteAchat}
+                onChange={(e) => setQuantiteAchat(e.target.value)}
+              />
+              <br />
               <button style={styleBouton} onClick={ajouterAchat}>+ Ajouter l'achat</button>
             </div>
 
-            {achats.length === 0 && <p>Aucun achat pour ce fournisseur.</p>}
+            {achats.length === 0 && <p style={{ color: '#6B6357' }}>Aucun achat pour ce fournisseur.</p>}
 
             {achats.map((achat) => {
               const resteAPayer = Number(achat.montant_total) - Number(achat.montant_paye)
@@ -197,14 +261,14 @@ function Fournisseurs() {
                 <div
                   key={achat.id}
                   style={{
-                    padding: '12px',
+                    padding: '14px',
                     marginBottom: '10px',
-                    border: '1px solid #ddd',
-                    borderRadius: '8px',
-                    backgroundColor: achat.statut === 'solde' ? '#e8f5e9' : '#fff8e1',
+                    border: '1px solid #E6E0D6',
+                    borderRadius: '10px',
+                    backgroundColor: achat.statut === 'solde' ? '#EAF5EC' : '#FDECE1',
                   }}
                 >
-                  {achat.description && <div style={{ fontStyle: 'italic', marginBottom: '4px' }}>{achat.description}</div>}
+                  {achat.description && <div style={{ fontStyle: 'italic', marginBottom: '4px', color: '#6B6357' }}>{achat.description}</div>}
                   <div>Montant total : <strong>{achat.montant_total} FCFA</strong></div>
                   <div>Déjà payé : {achat.montant_paye} FCFA</div>
                   <div>Reste à payer : <strong>{resteAPayer} FCFA</strong></div>
