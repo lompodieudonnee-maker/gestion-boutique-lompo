@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { getBoutiqueId } from '../lib/boutique'
 
 function TableauDeBord({ setPageActive }) {
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
-  const boutiqueId = employe?.boutique_id
+  const boutiqueId = getBoutiqueId()
   const peutVoirFinances = employe?.role === 'proprietaire' || employe?.voir_finances === true
 
   const [ongletPeriode, setOngletPeriode] = useState('aujourdhui')

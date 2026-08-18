@@ -1,10 +1,11 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { getBoutiqueId } from '../lib/boutique'
 
 function Clients() {
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
-  const boutiqueId = employe?.boutique_id
+  const boutiqueId = getBoutiqueId()
 
   const [clients, setClients] = useState([])
   const [clientSelectionne, setClientSelectionne] = useState(null)

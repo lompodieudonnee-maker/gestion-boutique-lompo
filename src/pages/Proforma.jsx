@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import './Stock.css'
+import { getBoutiqueId } from '../lib/boutique'
 
 function Proforma() {
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
-  const boutiqueId = employe?.boutique_id
-
+  const boutiqueId = getBoutiqueId()
   const [produits, setProduits] = useState([])
   const [clients, setClients] = useState([])
   const [commandesClient, setCommandesClient] = useState([])

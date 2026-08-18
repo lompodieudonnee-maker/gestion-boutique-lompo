@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import './Stock.css'
+import { getBoutiqueId } from '../lib/boutique'
 
 function Commande() {
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
-  const boutiqueId = employe?.boutique_id
-
+  const boutiqueId = getBoutiqueId()
   const [ongletPrincipal, setOngletPrincipal] = useState('client')
 
   const [produits, setProduits] = useState([])

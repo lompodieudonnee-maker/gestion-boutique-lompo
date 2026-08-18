@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { getBoutiqueId } from '../lib/boutique'
 
 function AlerteStock({ pageActive }) {
   const [produitsAlerte, setProduitsAlerte] = useState([])
   const [visible, setVisible] = useState(true)
 
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
-  const boutiqueId = employe?.boutique_id
-
+  const boutiqueId = getBoutiqueId()
   useEffect(() => {
     chargerAlertes()
   }, [pageActive])

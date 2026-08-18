@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { getBoutiqueId } from '../lib/boutique'
 
 function Fournisseurs() {
   const [fournisseurs, setFournisseurs] = useState([])
@@ -19,7 +20,7 @@ function Fournisseurs() {
   const [quantiteAchat, setQuantiteAchat] = useState('')
 
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
-  const boutiqueId = employe?.boutique_id
+  const boutiqueId = getBoutiqueId()
 
   useEffect(() => {
     chargerFournisseurs()

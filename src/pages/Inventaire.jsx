@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import './Stock.css';
-
+import { getBoutiqueId } from '../lib/boutique'
 function Inventaire() {
   const employeConnecte = JSON.parse(localStorage.getItem('employeConnecte'));
-  const boutiqueId = employeConnecte?.boutique_id;
-
+  const boutiqueId = getBoutiqueId()
   const [ongletActif, setOngletActif] = useState('valorisation');
   const [produits, setProduits] = useState([]);
   const [mouvements, setMouvements] = useState([]);

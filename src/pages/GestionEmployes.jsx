@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { getBoutiqueId } from '../lib/boutique'
 
 const PERMISSIONS = [
   { cle: 'voir_finances', label: 'Voir les finances (bénéfices, dettes)' },
@@ -16,6 +17,7 @@ function GestionEmployes() {
   const [role, setRole] = useState('employe')
 
   const employeConnecte = JSON.parse(localStorage.getItem('employeConnecte'))
+  const boutiqueId = getBoutiqueId()
 
   useEffect(() => {
     chargerEmployes()
@@ -26,7 +28,7 @@ function GestionEmployes() {
     const { data, error } = await supabase
       .from('employes')
       .select('*')
-      .eq('boutique_id', employeConnecte.boutique_id)
+      .eq('boutique_id', employeConnecte.boutiqueId)
       .order('created_at', { ascending: true })
 
     if (error) {
@@ -52,7 +54,7 @@ function GestionEmployes() {
         nom,
         pin,
         role,
-        boutique_id: employeConnecte.boutique_id,
+                boutique_id: boutiqueId,
         voir_finances: false,
         peut_gerer_fournisseurs: false,
       })
