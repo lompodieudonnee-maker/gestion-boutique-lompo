@@ -41,6 +41,23 @@ function AdminBoutiques({ onDeconnexion }) {
     chargerBoutiques()
   }
 
+  async function marquerPaiementRecu(id) {
+    const maintenant = new Date()
+    await supabase
+      .from('boutiques')
+      .update({ date_dernier_paiement: maintenant.toISOString() })
+      .eq('id', id)
+    chargerBoutiques()
+  }
+
+  function paiementEnRetard(boutique) {
+    if (!boutique.date_dernier_paiement) return false
+    const dernierPaiement = new Date(boutique.date_dernier_paiement)
+    const trenteJoursApres = new Date(dernierPaiement)
+    trenteJoursApres.setDate(trenteJoursApres.getDate() + 30)
+    return trenteJoursApres < new Date()
+  }
+
   const stylePastille = (statut) => {
     const couleurs = {
       en_attente: { bg: '#FDECE1', color: '#C9822A' },
@@ -106,10 +123,29 @@ function AdminBoutiques({ onDeconnexion }) {
                     Essai jusqu'au {new Date(b.date_fin_essai).toLocaleDateString('fr-FR')}
                   </div>
                 )}
+                <div style={{ fontSize: '13px', color: paiementEnRetard(b) ? '#C62828' : '#6B6357', fontWeight: paiementEnRetard(b) ? 600 : 400 }}>
+                  💰 Dernier paiement : {b.date_dernier_paiement ? new Date(b.date_dernier_paiement).toLocaleDateString('fr-FR') : 'Aucun'}
+                  {paiementEnRetard(b) && ' ⚠️ En retard'}
+                </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                 <span style={stylePastille(b.statut)}>{b.statut}</span>
+
+                <button
+                  onClick={() => marquerPaiementRecu(b.id)}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid #C9822A',
+                    background: 'white',
+                    color: '#C9822A',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  💰 Marquer paiement reçu
+                </button>
 
                 {b.statut === 'en_attente' && (
                   <button
