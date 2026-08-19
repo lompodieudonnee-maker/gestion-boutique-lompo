@@ -50,12 +50,18 @@ function AdminBoutiques({ onDeconnexion }) {
     chargerBoutiques()
   }
 
-  function paiementEnRetard(boutique) {
-    if (!boutique.date_dernier_paiement) return false
+  function dateFinCouverture(boutique) {
+    if (!boutique.date_dernier_paiement) return null
     const dernierPaiement = new Date(boutique.date_dernier_paiement)
-    const trenteJoursApres = new Date(dernierPaiement)
-    trenteJoursApres.setDate(trenteJoursApres.getDate() + 30)
-    return trenteJoursApres < new Date()
+    const fin = new Date(dernierPaiement)
+    fin.setDate(fin.getDate() + 30)
+    return fin
+  }
+
+  function paiementEnRetard(boutique) {
+    const fin = dateFinCouverture(boutique)
+    if (!fin) return false
+    return fin < new Date()
   }
 
   const stylePastille = (statut) => {
@@ -127,6 +133,11 @@ function AdminBoutiques({ onDeconnexion }) {
                   💰 Dernier paiement : {b.date_dernier_paiement ? new Date(b.date_dernier_paiement).toLocaleDateString('fr-FR') : 'Aucun'}
                   {paiementEnRetard(b) && ' ⚠️ En retard'}
                 </div>
+                {dateFinCouverture(b) && (
+                  <div style={{ fontSize: '13px', color: paiementEnRetard(b) ? '#C62828' : '#6B6357', fontWeight: paiementEnRetard(b) ? 600 : 400 }}>
+                    📅 Couvert jusqu'au : {dateFinCouverture(b).toLocaleDateString('fr-FR')}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
