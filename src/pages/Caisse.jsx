@@ -10,6 +10,7 @@ function Caisse() {
   const [panier, setPanier] = useState([])
   const [remise, setRemise] = useState(0)
   const [modePaiement, setModePaiement] = useState('Espèces')
+  const [montantRecu, setMontantRecu] = useState('')
   const [recherche, setRecherche] = useState('')
   const [venteReussie, setVenteReussie] = useState(false)
   const [nomBoutique, setNomBoutique] = useState('')
@@ -90,6 +91,7 @@ function Caisse() {
 
   const totalBrut = panier.reduce((somme, item) => somme + item.prix_vente * item.quantiteVente, 0)
   const totalFinal = totalBrut - remise
+  const monnaieRendue = montantRecu !== '' ? parseFloat(montantRecu) - totalFinal : null
 
   const produitsFiltres = produits.filter((p) =>
     p.nom.toLowerCase().includes(recherche.toLowerCase())
@@ -205,11 +207,14 @@ function Caisse() {
       remise,
       total: totalFinal,
       modePaiement,
+      montantRecu: montantRecu !== '' ? parseFloat(montantRecu) : null,
+      monnaieRendue: monnaieRendue,
     })
 
     setPanier([])
     setRemise(0)
     setModePaiement('Espèces')
+    setMontantRecu('')
     setClientSelectionneId('')
     setAjoutNouveauClient(false)
     setNouveauNomClient('')
@@ -232,7 +237,12 @@ function Caisse() {
     texte += `--------------------------\n`
     if (recu.remise > 0) texte += `Remise : -${recu.remise} FCFA\n`
     texte += `TOTAL : ${recu.total} FCFA\n`
-    texte += `Paiement : ${recu.modePaiement}\n\n`
+    texte += `Paiement : ${recu.modePaiement}\n`
+    if (recu.montantRecu !== null && recu.montantRecu !== undefined) {
+      texte += `Montant reçu : ${recu.montantRecu} FCFA\n`
+      texte += `Monnaie rendue : ${recu.monnaieRendue} FCFA\n`
+    }
+    texte += `\n`
     texte += `Merci pour votre achat !`
     return texte
   }
@@ -389,6 +399,24 @@ function Caisse() {
               <option>Crédit client</option>
             </select>
           </div>
+
+          <div style={{ marginTop: '10px' }}>
+            <label>Montant reçu du client (FCFA) : </label>
+            <input
+              type="number"
+              value={montantRecu}
+              onChange={(e) => setMontantRecu(e.target.value)}
+              style={{ width: '120px', padding: '6px 8px', border: '1px solid #E6E0D6', borderRadius: '6px' }}
+            />
+          </div>
+
+          {montantRecu !== '' && (
+            <p style={{ marginTop: '8px', fontWeight: 600, color: monnaieRendue < 0 ? '#C62828' : '#2E7D32' }}>
+              {monnaieRendue < 0
+                ? `Il manque ${Math.abs(monnaieRendue)} FCFA`
+                : `Monnaie à rendre : ${monnaieRendue} FCFA`}
+            </p>
+          )}
 
           {modePaiement === 'Crédit client' && (
             <div style={{ marginTop: '10px' }}>
