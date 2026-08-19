@@ -6,6 +6,7 @@ function Produits() {
   const boutiqueId = getBoutiqueId()
   const [produits, setProduits] = useState([])
   const [chargement, setChargement] = useState(true)
+  const [recherche, setRecherche] = useState('')
 
   const [nom, setNom] = useState('')
   const [categorie, setCategorie] = useState('')
@@ -155,6 +156,10 @@ function Produits() {
     fontSize: '13px',
     marginRight: '6px',
   }
+  const produitsFiltres = produits.filter((p) =>
+  p.nom.toLowerCase().includes(recherche.toLowerCase()) ||
+  (p.categorie && p.categorie.toLowerCase().includes(recherche.toLowerCase()))
+)
 
   return (
     <div style={{ padding: '20px', fontFamily: 'Poppins, Arial, sans-serif' }}>
@@ -204,16 +209,23 @@ function Produits() {
           </button>
         )}
       </form>
+      <input
+  type="text"
+  placeholder="🔍 Rechercher un produit..."
+  value={recherche}
+  onChange={(e) => setRecherche(e.target.value)}
+  style={{ ...styleInput, width: '100%', maxWidth: '400px', marginBottom: '16px' }}
+/>
 
       <h2>Liste des produits</h2>
   
 <p style={{ fontSize: '15px', fontWeight: 600, color: '#2B2620', marginBottom: '16px' }}>
-  Bénéfice total du stock : {produits.reduce((total, p) => total + (p.prix_vente - p.prix_achat) * p.quantite, 0).toLocaleString()} FCFA
+  Bénéfice total du stock : {produitsFiltres.reduce(...)((total, p) => total + (p.prix_vente - p.prix_achat) * p.quantite, 0).toLocaleString()} FCFA
 </p>
 
       {chargement ? (
         <p style={{ color: '#6B6357' }}>Chargement...</p>
-      ) : produits.length === 0 ? (
+      ) : produitsFiltres.length === 0 ? (
         <p style={{ color: '#6B6357' }}>Aucun produit pour le moment.</p>
       ) : (
         <table cellPadding="10" style={{ borderCollapse: 'collapse', width: '100%', backgroundColor: 'white', border: '1px solid #E6E0D6', borderRadius: '10px', overflow: 'hidden' }}>
@@ -231,6 +243,7 @@ function Produits() {
             </tr>
           </thead>
           <tbody>
+            {produitsFiltres.map((p) => (
             {produits.map((p) => (
               <tr key={p.id} style={{ backgroundColor: p.quantite <= p.seuil_alerte ? '#FDECE1' : 'white', borderTop: '1px solid #E6E0D6' }}>
                 <td>{p.nom}</td>
