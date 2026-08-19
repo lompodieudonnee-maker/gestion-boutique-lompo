@@ -28,7 +28,7 @@ function GestionEmployes() {
     const { data, error } = await supabase
       .from('employes')
       .select('*')
-      .eq('boutique_id', employeConnecte.boutiqueId)
+      .eq('boutique_id', boutiqueId)
       .order('created_at', { ascending: true })
 
     if (error) {
