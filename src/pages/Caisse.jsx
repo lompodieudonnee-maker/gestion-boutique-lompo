@@ -195,6 +195,7 @@ function Caisse() {
     setDernierRecu({
       numero: vente.id,
       date: new Date(),
+      vendeur: employe?.nom || '',
       articles: panier.map((item) => ({
         nom: item.nom,
         quantite: item.quantiteVente,
@@ -223,6 +224,7 @@ function Caisse() {
     let texte = `🧾 ${nomBoutique || 'Reçu de vente'}\n`
     texte += `Vente n°${recu.numero}\n`
     texte += `${recu.date.toLocaleDateString('fr-FR')} ${recu.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}\n`
+    if (recu.vendeur) texte += `Vendeur : ${recu.vendeur}\n`
     texte += `--------------------------\n`
     recu.articles.forEach((a) => {
       texte += `${a.nom} x${a.quantite} = ${a.sousTotal} FCFA\n`
