@@ -235,3 +235,8 @@ h1, h2, h3, h4 {
   border-radius: var(--rayon);
   box-shadow: var(--ombre);
 }
+@media (max-width: 768px) {
+  .caisse-layout {
+    flex-direction: column-reverse;
+  }
+}

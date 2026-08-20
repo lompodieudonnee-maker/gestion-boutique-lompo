@@ -326,7 +326,7 @@ function Caisse() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+      <div className="caisse-layout" style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
         <div style={{ flex: '1', minWidth: '300px' }}>
           <h2>Produits disponibles</h2>
           <input
