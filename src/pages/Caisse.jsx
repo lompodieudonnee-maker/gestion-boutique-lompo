@@ -15,6 +15,8 @@ function Caisse() {
   const [venteReussie, setVenteReussie] = useState(false)
   const [nomBoutique, setNomBoutique] = useState('')
   const [dernierRecu, setDernierRecu] = useState(null)
+  const [afficherArretJour, setAfficherArretJour] = useState(false)
+  const [arretDuJour, setArretDuJour] = useState(null)
 
   // --- Nouveau : gestion du client pour les ventes à crédit ---
   const [clients, setClients] = useState([])
@@ -37,6 +39,29 @@ function Caisse() {
       .eq('id', boutiqueId)
       .single()
     if (!error && data) setNomBoutique(data.nom)
+  }
+  async function chargerArretDuJour() {
+    const debut = new Date()
+    debut.setHours(0, 0, 0, 0)
+
+    const { data: ventesJour } = await supabase
+      .from('sales')
+      .select('total, mode_paiement, created_at')
+      .eq('boutique_id', boutiqueId)
+      .gte('created_at', debut.toISOString())
+
+    const cash = (ventesJour || [])
+      .filter((v) => v.mode_paiement === 'Espèces')
+      .reduce((s, v) => s + Number(v.total || 0), 0)
+    const mobile = (ventesJour || [])
+      .filter((v) => v.mode_paiement === 'Orange Money' || v.mode_paiement === 'Moov Money')
+      .reduce((s, v) => s + Number(v.total || 0), 0)
+    const credit = (ventesJour || [])
+      .filter((v) => v.mode_paiement === 'Crédit client')
+      .reduce((s, v) => s + Number(v.total || 0), 0)
+
+    setArretDuJour({ cash, mobile, credit, total: cash + mobile + credit })
+    setAfficherArretJour(true)
   }
 
   async function chargerClients() {
@@ -288,6 +313,47 @@ function Caisse() {
   return (
     <div style={{ padding: '20px', fontFamily: 'Poppins, Arial, sans-serif' }}>
       <h1>💰 Vente</h1>
+            <button
+        onClick={chargerArretDuJour}
+        style={{
+          padding: '9px 16px',
+          marginBottom: '15px',
+          backgroundColor: '#37474F',
+          color: 'white',
+          border: 'none',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          fontFamily: 'Poppins, Arial, sans-serif',
+          fontWeight: 500,
+        }}
+      >
+        📊 Voir l'arrêt du jour
+      </button>
+            {afficherArretJour && arretDuJour && (
+        <div
+          style={{
+            backgroundColor: '#FFFFFF',
+            border: '1px solid #E6E0D6',
+            borderRadius: '10px',
+            padding: '18px',
+            marginBottom: '20px',
+            maxWidth: '350px',
+          }}
+        >
+          <h3 style={{ marginTop: 0 }}>Arrêt de caisse du jour</h3>
+          <p style={{ margin: '6px 0' }}>💵 Cash : <strong>{arretDuJour.cash.toLocaleString('fr-FR')} FCFA</strong></p>
+          <p style={{ margin: '6px 0' }}>📱 Mobile Money : <strong>{arretDuJour.mobile.toLocaleString('fr-FR')} FCFA</strong></p>
+          <p style={{ margin: '6px 0' }}>📒 Crédit client : <strong>{arretDuJour.credit.toLocaleString('fr-FR')} FCFA</strong></p>
+          <hr style={{ border: 'none', borderTop: '1px solid #E6E0D6', margin: '10px 0' }} />
+          <p style={{ margin: '6px 0', fontSize: '17px' }}>TOTAL : <strong>{arretDuJour.total.toLocaleString('fr-FR')} FCFA</strong></p>
+          <button
+            onClick={() => setAfficherArretJour(false)}
+            style={{ marginTop: '8px', background: 'none', border: 'none', color: '#6B6357', cursor: 'pointer', fontFamily: 'Poppins, Arial, sans-serif' }}
+          >
+            Fermer
+          </button>
+        </div>
+      )}
 
       {venteReussie && (
         <div style={{ backgroundColor: '#EAF5EC', color: '#2E7D32', padding: '12px', marginBottom: '15px', borderRadius: '8px', fontWeight: 500 }}>
