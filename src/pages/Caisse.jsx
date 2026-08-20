@@ -194,10 +194,23 @@ function Caisse() {
     }
 
     // On garde une copie des infos de la vente pour générer le reçu
+        // --- Nouveau : nom du client pour le reçu (vente à crédit uniquement) ---
+    let nomClientRecu = ''
+    if (modePaiement === 'Crédit client') {
+      if (ajoutNouveauClient) {
+        nomClientRecu = nouveauNomClient.trim()
+      } else {
+        const clientTrouve = clients.find((c) => c.id === idClientCredit)
+        nomClientRecu = clientTrouve ? clientTrouve.nom : ''
+      }
+    }
+
+    // On garde une copie des infos de la vente pour générer le reçu
     setDernierRecu({
       numero: vente.id,
       date: new Date(),
       vendeur: employe?.nom || '',
+      client: nomClientRecu,
       articles: panier.map((item) => ({
         nom: item.nom,
         quantite: item.quantiteVente,
@@ -229,7 +242,9 @@ function Caisse() {
     let texte = `🧾 ${nomBoutique || 'Reçu de vente'}\n`
     texte += `Vente n°${recu.numero}\n`
     texte += `${recu.date.toLocaleDateString('fr-FR')} ${recu.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}\n`
-    if (recu.vendeur) texte += `Vendeur : ${recu.vendeur}\n`
+        if (recu.vendeur) texte += `Vendeur : ${recu.vendeur}\n`
+            if (recu.client) texte += `Client : ${recu.client}\n`
+    if (recu.client) texte += `Client : ${recu.client}\n`
     texte += `--------------------------\n`
     recu.articles.forEach((a) => {
       texte += `${a.nom} x${a.quantite} = ${a.sousTotal} FCFA\n`
