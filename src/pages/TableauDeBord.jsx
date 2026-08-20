@@ -27,6 +27,7 @@ function TableauDeBord({ setPageActive }) {
   const [employePerso, setEmployePerso] = useState(employe?.id || '')
   const [dateDebutPerso, setDateDebutPerso] = useState('')
   const [dateFinPerso, setDateFinPerso] = useState('')
+  const [dernieresVentes, setDernieresVentes] = useState([])
 
   useEffect(() => {
     chargerDonnees()
@@ -75,14 +76,30 @@ function TableauDeBord({ setPageActive }) {
     const idEmployeCible = peutVoirFinances ? (employePerso || employe?.id) : employe?.id
 
     // --- Ventes ---
-    let requeteVentes = supabase.from('sales').select('total, mode_paiement, created_at, employe_id').eq('boutique_id', boutiqueId)
+        let requeteVentes = supabase.from('sales').select('id, total, mode_paiement, created_at, employe_id').eq('boutique_id', boutiqueId)
     if (filtrerParEmploye) requeteVentes = requeteVentes.eq('employe_id', idEmployeCible)
     const { data: ventes } = await requeteVentes
 
     const ventesFiltrees = filtrerParDate
       ? (ventes || []).filter((v) => new Date(v.created_at) >= debut && new Date(v.created_at) <= fin)
       : (ventes || [])
+    // --- Dernières ventes (produits vendus) ---
+    const idsVentesFiltrees = ventesFiltrees.map((v) => v.id)
+    const dateParVente = {}
+    ventesFiltrees.forEach((v) => { dateParVente[v.id] = v.created_at })
 
+    const { data: itemsVentes } = await supabase
+      .from('sale_items')
+      .select('nom_produit, quantite, sale_id')
+      .eq('boutique_id', boutiqueId)
+
+    const itemsFiltres = (itemsVentes || [])
+      .filter((item) => idsVentesFiltrees.includes(item.sale_id))
+      .map((item) => ({ ...item, date: dateParVente[item.sale_id] }))
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 15)
+
+    setDernieresVentes(itemsFiltres)
     const ca = ventesFiltrees.reduce((s, v) => s + Number(v.total || 0), 0)
     const cash = ventesFiltrees
       .filter((v) => v.mode_paiement === 'Espèces')
@@ -391,6 +408,42 @@ function TableauDeBord({ setPageActive }) {
             </div>
           )}
         </div>
+      </div>
+            <div
+        style={{
+          marginTop: '20px',
+          backgroundColor: 'white',
+          border: '1px solid #E6E0D6',
+          borderRadius: '10px',
+          padding: '18px',
+        }}
+      >
+        <h3 style={{ marginTop: 0, marginBottom: '12px' }}>Derniers produits vendus</h3>
+        {dernieresVentes.length === 0 ? (
+          <p style={{ color: '#6B6357' }}>Aucune vente sur cette période.</p>
+        ) : (
+          <table cellPadding="8" style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#F7F5F2' }}>
+                <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Produit</th>
+                <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Qté</th>
+                <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Heure</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dernieresVentes.map((item, index) => (
+                <tr key={index} style={{ borderTop: '1px solid #E6E0D6' }}>
+                  <td>{item.nom_produit}</td>
+                  <td>{item.quantite}</td>
+                  <td>
+                    {new Date(item.date).toLocaleDateString('fr-FR')}{' '}
+                    {new Date(item.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   )
