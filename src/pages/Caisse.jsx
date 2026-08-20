@@ -244,7 +244,6 @@ function Caisse() {
     texte += `${recu.date.toLocaleDateString('fr-FR')} ${recu.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}\n`
         if (recu.vendeur) texte += `Vendeur : ${recu.vendeur}\n`
             if (recu.client) texte += `Client : ${recu.client}\n`
-    if (recu.client) texte += `Client : ${recu.client}\n`
     texte += `--------------------------\n`
     recu.articles.forEach((a) => {
       texte += `${a.nom} x${a.quantite} = ${a.sousTotal} FCFA\n`
