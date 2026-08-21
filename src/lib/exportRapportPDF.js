@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+function formaterMontant(nombre) { return nombre.toLocaleString('fr-FR').replace(/\u202F|\u00A0/g, ' ') }
 
 export function genererRapportVentesPDF({ boutiqueNom, dateDebut, dateFin, indicateurs, ventesDetail }) {
   const doc = new jsPDF()
@@ -23,7 +24,7 @@ export function genererRapportVentesPDF({ boutiqueNom, dateDebut, dateFin, indic
   autoTable(doc, {
     startY: 46,
     head: [['Indicateur', 'Montant (FCFA)']],
-    body: indicateurs.map((i) => [i.label, i.valeur.toLocaleString('fr-FR')]),
+    body: indicateurs.map((i) => [i.label, formaterMontant(i.valeur),
     headStyles: { fillColor: [201, 130, 42] },
     styles: { fontSize: 10 },
   })
@@ -42,7 +43,7 @@ export function genererRapportVentesPDF({ boutiqueNom, dateDebut, dateFin, indic
     autoTable(doc, {
       startY: yApresIndicateurs + 5,
       head: [['Date', 'Produits vendus', 'Mode de paiement', 'Montant (FCFA)']],
-      body: ventesDetail.map((v) => [v.date, v.produits, v.modePaiement, v.montant.toLocaleString('fr-FR')]),
+      body: ventesDetail.map((v) => [v.date, v.produits, v.modePaiement, formaterMontant(v.montant)]),
       headStyles: { fillColor: [55, 71, 79] },
       styles: { fontSize: 9 },
       columnStyles: { 1: { cellWidth: 70 } },
