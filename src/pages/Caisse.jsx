@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { getBoutiqueId } from '../lib/boutique'
+import { genererRapportVentesPDF } from "../lib/exportRapportPDF"
 
 function Caisse() {
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
@@ -18,11 +19,15 @@ function Caisse() {
   const [afficherArretJour, setAfficherArretJour] = useState(false)
   const [arretDuJour, setArretDuJour] = useState(null)
 
-  // --- Nouveau : gestion du client pour les ventes à crédit ---
   const [clients, setClients] = useState([])
   const [clientSelectionneId, setClientSelectionneId] = useState('')
   const [ajoutNouveauClient, setAjoutNouveauClient] = useState(false)
   const [nouveauNomClient, setNouveauNomClient] = useState('')
+
+  const [panneauRapportOuvert, setPanneauRapportOuvert] = useState(false)
+  const [dateDebutRapport, setDateDebutRapport] = useState('')
+  const [dateFinRapport, setDateFinRapport] = useState('')
+  const [genererEnCours, setGenererEnCours] = useState(false)
 
   async function chargerProduits() {
     const { data, error } = await supabase
@@ -40,6 +45,7 @@ function Caisse() {
       .single()
     if (!error && data) setNomBoutique(data.nom)
   }
+
   async function chargerArretDuJour() {
     const debut = new Date()
     debut.setHours(0, 0, 0, 0)
@@ -62,6 +68,100 @@ function Caisse() {
 
     setArretDuJour({ cash, mobile, credit, total: cash + mobile + credit })
     setAfficherArretJour(true)
+  }
+
+  function formaterDateAffichage(dateStr) {
+    const [annee, mois, jour] = dateStr.split('-')
+    return `${jour}/${mois}/${annee}`
+  }
+
+  async function handleGenererRapport() {
+    if (!dateDebutRapport || !dateFinRapport) {
+      alert('Veuillez choisir une date de début et une date de fin.')
+      return
+    }
+    setGenererEnCours(true)
+    try {
+      const debutComplet = `${dateDebutRapport}T00:00:00`
+      const finComplet = `${dateFinRapport}T23:59:59`
+
+      const { data: ventes, error: erreurVentes } = await supabase
+        .from('sales')
+        .select('id, created_at, mode_paiement, total')
+        .eq('boutique_id', boutiqueId)
+        .gte('created_at', debutComplet)
+        .lte('created_at', finComplet)
+        .order('created_at', { ascending: true })
+
+      if (erreurVentes) throw new Error('Erreur ventes : ' + erreurVentes.message)
+      if (!ventes || ventes.length === 0) throw new Error('Aucune vente trouvée sur cette période.')
+
+      const idsVentes = ventes.map((v) => v.id)
+
+      const { data: lignes, error: erreurLignes } = await supabase
+        .from('sale_items')
+        .select('sale_id, nom_produit, quantite')
+        .in('sale_id', idsVentes)
+
+      if (erreurLignes) throw new Error('Erreur détail ventes : ' + erreurLignes.message)
+
+      const { data: depensesPeriode } = await supabase
+        .from('depenses')
+        .select('montant')
+        .eq('boutique_id', boutiqueId)
+        .gte('created_at', debutComplet)
+        .lte('created_at', finComplet)
+
+      const { data: achatsPeriode } = await supabase
+        .from('achats')
+        .select('montant')
+        .eq('boutique_id', boutiqueId)
+        .gte('created_at', debutComplet)
+        .lte('created_at', finComplet)
+
+      const chiffreAffaires = ventes.reduce((t, v) => t + Number(v.total || 0), 0)
+      const totalCash = ventes.filter((v) => v.mode_paiement === 'Espèces').reduce((t, v) => t + Number(v.total || 0), 0)
+      const totalMobile = ventes.filter((v) => v.mode_paiement === 'Orange Money' || v.mode_paiement === 'Moov Money').reduce((t, v) => t + Number(v.total || 0), 0)
+      const totalCredit = ventes.filter((v) => v.mode_paiement === 'Crédit client').reduce((t, v) => t + Number(v.total || 0), 0)
+      const totalDepenses = (depensesPeriode || []).reduce((t, d) => t + Number(d.montant || 0), 0)
+      const totalAchats = (achatsPeriode || []).reduce((t, a) => t + Number(a.montant || 0), 0)
+      const benefice = chiffreAffaires - totalDepenses - totalAchats
+
+      const indicateurs = [
+        { label: "Chiffre d'affaires", valeur: chiffreAffaires },
+        { label: 'Bénéfice', valeur: benefice },
+        { label: 'Total Cash (Espèces)', valeur: totalCash },
+        { label: 'Total Mobile Money', valeur: totalMobile },
+        { label: 'Total Crédit client', valeur: totalCredit },
+        { label: 'Dépenses', valeur: totalDepenses },
+        { label: 'Achats fournisseurs', valeur: totalAchats },
+      ]
+
+      const ventesDetail = ventes.map((v) => {
+        const produitsVente = (lignes || [])
+          .filter((l) => l.sale_id === v.id)
+          .map((l) => `${l.nom_produit} x${l.quantite}`)
+          .join(', ')
+        return {
+          date: new Date(v.created_at).toLocaleDateString('fr-FR'),
+          produits: produitsVente,
+          modePaiement: v.mode_paiement,
+          montant: Number(v.total || 0),
+        }
+      })
+
+      genererRapportVentesPDF({
+        boutiqueNom: nomBoutique,
+        dateDebut: formaterDateAffichage(dateDebutRapport),
+        dateFin: formaterDateAffichage(dateFinRapport),
+        indicateurs,
+        ventesDetail,
+      })
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      setGenererEnCours(false)
+    }
   }
 
   async function chargerClients() {
@@ -128,7 +228,6 @@ function Caisse() {
       return
     }
 
-    // --- Nouveau : détermination du client en cas de vente à crédit ---
     let idClientCredit = null
 
     if (modePaiement === 'Crédit client') {
@@ -204,7 +303,6 @@ function Caisse() {
       })
     }
 
-    // --- Nouveau : création automatique de la dette en cas de vente à crédit ---
     if (modePaiement === 'Crédit client' && idClientCredit) {
       const { error: erreurCredit } = await supabase.from('credits').insert({
         client_id: idClientCredit,
@@ -218,8 +316,6 @@ function Caisse() {
       }
     }
 
-    // On garde une copie des infos de la vente pour générer le reçu
-        // --- Nouveau : nom du client pour le reçu (vente à crédit uniquement) ---
     let nomClientRecu = ''
     if (modePaiement === 'Crédit client') {
       if (ajoutNouveauClient) {
@@ -230,7 +326,6 @@ function Caisse() {
       }
     }
 
-    // On garde une copie des infos de la vente pour générer le reçu
     setDernierRecu({
       numero: vente.id,
       date: new Date(),
@@ -267,8 +362,8 @@ function Caisse() {
     let texte = `🧾 ${nomBoutique || 'Reçu de vente'}\n`
     texte += `Vente n°${recu.numero}\n`
     texte += `${recu.date.toLocaleDateString('fr-FR')} ${recu.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}\n`
-        if (recu.vendeur) texte += `Vendeur : ${recu.vendeur}\n`
-            if (recu.client) texte += `Client : ${recu.client}\n`
+    if (recu.vendeur) texte += `Vendeur : ${recu.vendeur}\n`
+    if (recu.client) texte += `Client : ${recu.client}\n`
     texte += `--------------------------\n`
     recu.articles.forEach((a) => {
       texte += `${a.nom} x${a.quantite} = ${a.sousTotal} FCFA\n`
@@ -313,23 +408,94 @@ function Caisse() {
   return (
     <div style={{ padding: '20px', fontFamily: 'Poppins, Arial, sans-serif' }}>
       <h1>💰 Vente</h1>
-            <button
-        onClick={chargerArretDuJour}
-        style={{
-          padding: '9px 16px',
-          marginBottom: '15px',
-          backgroundColor: '#37474F',
-          color: 'white',
-          border: 'none',
-          borderRadius: '8px',
-          cursor: 'pointer',
-          fontFamily: 'Poppins, Arial, sans-serif',
-          fontWeight: 500,
-        }}
-      >
-        📊 Voir l'arrêt du jour
-      </button>
-            {afficherArretJour && arretDuJour && (
+
+      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '15px' }}>
+        <button
+          onClick={chargerArretDuJour}
+          style={{
+            padding: '9px 16px',
+            backgroundColor: '#37474F',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontFamily: 'Poppins, Arial, sans-serif',
+            fontWeight: 500,
+          }}
+        >
+          📊 Voir l'arrêt du jour
+        </button>
+
+        <button
+          onClick={() => setPanneauRapportOuvert(!panneauRapportOuvert)}
+          style={{
+            padding: '9px 16px',
+            backgroundColor: '#C9822A',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontFamily: 'Poppins, Arial, sans-serif',
+            fontWeight: 500,
+          }}
+        >
+          📄 Rapport PDF
+        </button>
+      </div>
+
+      {panneauRapportOuvert && (
+        <div
+          style={{
+            backgroundColor: '#FFFFFF',
+            border: '1px solid #E6E0D6',
+            borderRadius: '10px',
+            padding: '18px',
+            marginBottom: '20px',
+            maxWidth: '350px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+          }}
+        >
+          <h3 style={{ margin: 0 }}>Rapport de ventes (PDF)</h3>
+          <label>
+            Du :{' '}
+            <input
+              type="date"
+              value={dateDebutRapport}
+              onChange={(e) => setDateDebutRapport(e.target.value)}
+              style={{ padding: '6px 8px', border: '1px solid #E6E0D6', borderRadius: '6px' }}
+            />
+          </label>
+          <label>
+            Au :{' '}
+            <input
+              type="date"
+              value={dateFinRapport}
+              onChange={(e) => setDateFinRapport(e.target.value)}
+              style={{ padding: '6px 8px', border: '1px solid #E6E0D6', borderRadius: '6px' }}
+            />
+          </label>
+          <button
+            onClick={handleGenererRapport}
+            disabled={genererEnCours}
+            style={{
+              padding: '9px 16px',
+              backgroundColor: '#C9822A',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontFamily: 'Poppins, Arial, sans-serif',
+              fontWeight: 500,
+            }}
+          >
+            {genererEnCours ? 'Génération...' : 'Générer le PDF'}
+          </button>
+        </div>
+      )}
+
+      {afficherArretJour && arretDuJour && (
         <div
           style={{
             backgroundColor: '#FFFFFF',
