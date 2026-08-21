@@ -24,7 +24,8 @@ export function genererRapportVentesPDF({ boutiqueNom, dateDebut, dateFin, indic
   autoTable(doc, {
     startY: 46,
     head: [['Indicateur', 'Montant (FCFA)']],
-    body: indicateurs.map((i) => [i.label, formaterMontant(i.valeur),
+    headStyles: { fillColor: [201, 130, 42] },
+    body: indicateurs.map((i) => [i.label, formaterMontant(i.valeur)]),
     headStyles: { fillColor: [201, 130, 42] },
     styles: { fontSize: 10 },
   })
