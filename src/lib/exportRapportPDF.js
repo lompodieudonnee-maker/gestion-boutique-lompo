@@ -8,7 +8,7 @@ export function genererRapportVentesPDF({ boutiqueNom, dateDebut, dateFin, indic
   // En-tête
   doc.setFontSize(18)
   doc.setTextColor(201, 130, 42) // #C9822A
-  doc.text('Bloc - Rapport de ventes', 14, 18)
+  doc.text('Stockia - Rapport de ventes', 14, 18)
 
   doc.setFontSize(11)
   doc.setTextColor(60, 60, 60)

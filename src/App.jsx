@@ -100,8 +100,8 @@ function App() {
 
       <nav className={`app-sidebar${menuOuvert ? ' ouverte' : ''}`}>
         <div className="app-sidebar-logo">
-          <div className="app-sidebar-logo-icone">B</div>
-          <span className="app-sidebar-logo-nom">Bloc</span>
+          <div className="app-sidebar-logo-icone">S</div>
+          <span className="app-sidebar-logo-nom">Stockia</span>
         </div>
 
         {estSuperAdmin && (

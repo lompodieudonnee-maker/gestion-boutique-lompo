@@ -8,9 +8,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Bloc - Gestion Boutique',
-        short_name: 'Bloc',
-        description: 'Application de gestion de boutique - Bloc',
+        name: 'Stockia- Gestion Boutique',
+        short_name: 'Stockia',
+        description: 'Application de gestion de boutique -Stockia ',
         theme_color: '#C9822A',
         background_color: '#ffffff',
         display: 'standalone',

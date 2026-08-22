@@ -129,7 +129,7 @@ function Inscription() {
         padding: '20px',
       }}
     >
-      <h1>Créer votre compte Bloc</h1>
+      <h1>Créer votre compte Stockia </h1>
       <p style={{ color: '#6B6357', marginBottom: '1.5rem' }}>
         Inscrivez votre boutique en quelques instants
       </p>
