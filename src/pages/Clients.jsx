@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { getBoutiqueId } from '../lib/boutique'
@@ -10,6 +9,7 @@ function Clients() {
   const [clients, setClients] = useState([])
   const [clientSelectionne, setClientSelectionne] = useState(null)
   const [credits, setCredits] = useState([])
+  const [paiementsParCredit, setPaiementsParCredit] = useState({})
 
   const [nom, setNom] = useState('')
   const [telephone, setTelephone] = useState('')
@@ -37,7 +37,31 @@ function Clients() {
       .select('*')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
-    if (!error) setCredits(data)
+    if (!error) {
+      setCredits(data)
+      chargerHistoriquePaiements(data.map((c) => c.id))
+    }
+  }
+
+  async function chargerHistoriquePaiements(creditIds) {
+    if (!creditIds || creditIds.length === 0) {
+      setPaiementsParCredit({})
+      return
+    }
+    const { data, error } = await supabase
+      .from('credit_paiements')
+      .select('*')
+      .in('credit_id', creditIds)
+      .order('date_paiement', { ascending: true })
+
+    if (!error && data) {
+      const groupe = {}
+      data.forEach((p) => {
+        if (!groupe[p.credit_id]) groupe[p.credit_id] = []
+        groupe[p.credit_id].push(p)
+      })
+      setPaiementsParCredit(groupe)
+    }
   }
 
   async function ajouterClient() {
@@ -103,8 +127,75 @@ function Clients() {
       alert('Erreur : ' + error.message)
       return
     }
+
+    const { error: erreurHistorique } = await supabase.from('credit_paiements').insert({
+      credit_id: credit.id,
+      montant: Number(montantPaiement),
+      boutique_id: boutiqueId,
+    })
+
+    if (erreurHistorique) {
+      alert('Le paiement est enregistré, mais l\'historique n\'a pas pu être sauvegardé : ' + erreurHistorique.message)
+    }
+
     setMontantPaiement('')
     chargerCredits(clientSelectionne.id)
+  }
+
+  function formaterTelephoneWhatsApp(tel) {
+    if (!tel) return null
+    let numero = tel.replace(/\s+/g, '').replace(/^0/, '')
+    if (!numero.startsWith('226')) numero = '226' + numero
+    return numero
+  }
+
+  async function envoyerRecuWhatsApp(credit) {
+    let texte = `🧾 Reçu de crédit\n`
+    texte += `Client : ${clientSelectionne.nom}\n`
+    texte += `--------------------------\n`
+
+    if (credit.sale_id) {
+      const { data: lignes } = await supabase
+        .from('sale_items')
+        .select('nom_produit, quantite, prix_unitaire')
+        .eq('sale_id', credit.sale_id)
+
+      if (lignes && lignes.length > 0) {
+        texte += `Produits achetés :\n`
+        lignes.forEach((l) => {
+          texte += `- ${l.nom_produit} x${l.quantite} = ${l.quantite * l.prix_unitaire} FCFA\n`
+        })
+        texte += `--------------------------\n`
+      }
+    }
+
+    texte += `Montant total : ${credit.montant_total} FCFA\n`
+
+    const paiements = paiementsParCredit[credit.id] || []
+    if (paiements.length > 0) {
+      texte += `--------------------------\n`
+      texte += `Historique des versements :\n`
+      paiements.forEach((p) => {
+        const date = new Date(p.date_paiement).toLocaleDateString('fr-FR')
+        texte += `- ${date} : ${p.montant} FCFA\n`
+      })
+    }
+
+    texte += `--------------------------\n`
+    texte += `Total payé : ${credit.montant_paye} FCFA\n`
+    const reste = Number(credit.montant_total) - Number(credit.montant_paye)
+    if (credit.statut === 'solde') {
+      texte += `\n✅ CRÉDIT SOLDÉ. Merci pour votre règlement !`
+    } else {
+      texte += `Reste à payer : ${reste} FCFA\n`
+    }
+
+    const texteEncode = encodeURIComponent(texte)
+    const numero = formaterTelephoneWhatsApp(clientSelectionne.telephone)
+    const url = numero
+      ? `https://wa.me/${numero}?text=${texteEncode}`
+      : `https://wa.me/?text=${texteEncode}`
+    window.open(url, '_blank')
   }
 
   const styleBouton = {
@@ -117,6 +208,19 @@ function Clients() {
     fontSize: '14px',
     fontWeight: 500,
     fontFamily: 'Poppins, Arial, sans-serif',
+  }
+
+  const styleBoutonWhatsApp = {
+    padding: '9px 16px',
+    backgroundColor: '#25D366',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 500,
+    fontFamily: 'Poppins, Arial, sans-serif',
+    marginLeft: '8px',
   }
 
   const styleInput = {
@@ -201,6 +305,7 @@ function Clients() {
 
             {credits.map((credit) => {
               const resteAPayer = Number(credit.montant_total) - Number(credit.montant_paye)
+              const paiements = paiementsParCredit[credit.id] || []
               return (
                 <div
                   key={credit.id}
@@ -217,6 +322,17 @@ function Clients() {
                   <div>Reste à payer : <strong>{resteAPayer}</strong> FCFA</div>
                   <div>Statut : {credit.statut === 'solde' ? '✅ Soldé' : '⏳ En cours'}</div>
 
+                  {paiements.length > 0 && (
+                    <div style={{ marginTop: '8px', fontSize: '13px', color: '#6B6357' }}>
+                      <div style={{ fontWeight: 600, marginBottom: '2px' }}>Historique des versements :</div>
+                      {paiements.map((p) => (
+                        <div key={p.id}>
+                          {new Date(p.date_paiement).toLocaleDateString('fr-FR')} — {p.montant} FCFA
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {credit.statut !== 'solde' && (
                     <div style={{ marginTop: '8px' }}>
                       <input
@@ -231,6 +347,12 @@ function Clients() {
                       </button>
                     </div>
                   )}
+
+                  <div style={{ marginTop: '8px' }}>
+                    <button style={styleBoutonWhatsApp} onClick={() => envoyerRecuWhatsApp(credit)}>
+                      📲 Envoyer sur WhatsApp
+                    </button>
+                  </div>
                 </div>
               )
             })}
