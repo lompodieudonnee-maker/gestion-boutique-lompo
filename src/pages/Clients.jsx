@@ -52,7 +52,7 @@ function Clients() {
       .from('credit_paiements')
       .select('*')
       .in('credit_id', creditIds)
-      .order('date_paiement', { ascending: true })
+      .order('created_at', { ascending: true })
 
     if (!error && data) {
       const groupe = {}
@@ -176,7 +176,7 @@ function Clients() {
       texte += `--------------------------\n`
       texte += `Historique des versements :\n`
       paiements.forEach((p) => {
-        const date = new Date(p.date_paiement).toLocaleDateString('fr-FR')
+        const date = new Date(p.created_at).toLocaleDateString('fr-FR')
         texte += `- ${date} : ${p.montant} FCFA\n`
       })
     }
@@ -327,7 +327,7 @@ function Clients() {
                       <div style={{ fontWeight: 600, marginBottom: '2px' }}>Historique des versements :</div>
                       {paiements.map((p) => (
                         <div key={p.id}>
-                          {new Date(p.date_paiement).toLocaleDateString('fr-FR')} — {p.montant} FCFA
+                          {new Date(p.created_at).toLocaleDateString('fr-FR')} — {p.montant} FCFA
                         </div>
                       ))}
                     </div>
