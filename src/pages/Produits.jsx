@@ -221,9 +221,12 @@ function Produits() {
 
       <h2>Liste des produits</h2>
 
-      <p style={{ fontSize: '15px', fontWeight: 600, color: '#2B2620', marginBottom: '16px' }}>
-        Bénéfice total du stock : {produitsFiltres.reduce((total, p) => total + (p.prix_vente - p.prix_achat) * p.quantite, 0).toLocaleString()} FCFA
-      </p>
+      <p style={{ fontSize: '15px', fontWeight: 600, color: '#2B2620', marginBottom: '4px' }}>
+  Valeur totale du stock : {produitsFiltres.reduce((total, p) => total + p.prix_achat * p.quantite, 0).toLocaleString()} FCFA
+</p>
+<p style={{ fontSize: '15px', fontWeight: 600, color: '#2B2620', marginBottom: '16px' }}>
+  Bénéfice total du stock : {produitsFiltres.reduce((total, p) => total + (p.prix_vente - p.prix_achat) * p.quantite, 0).toLocaleString()} FCFA
+</p>
 
       {chargement ? (
         <p style={{ color: '#6B6357' }}>Chargement...</p>
