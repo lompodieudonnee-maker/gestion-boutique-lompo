@@ -5,6 +5,7 @@ import { getBoutiqueId } from '../lib/boutique'
 const PERMISSIONS = [
   { cle: 'voir_finances', label: 'Voir les finances (bénéfices, dettes)' },
   { cle: 'peut_gerer_fournisseurs', label: 'Gérer les fournisseurs' },
+  { cle: 'peut_gerer_stock', label: 'Gérer le Stock' },
 ]
 
 function GestionEmployes() {
