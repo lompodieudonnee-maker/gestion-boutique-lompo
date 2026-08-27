@@ -2,11 +2,18 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
 function Connexion({ onConnexionReussie }) {
+  const [mode, setMode] = useState('choix') // 'choix' | 'boutique' | 'admin'
   const [pin, setPin] = useState('')
   const [erreur, setErreur] = useState('')
   const [chargement, setChargement] = useState(false)
 
-  async function handleConnexion(e) {
+  function retourChoix() {
+    setMode('choix')
+    setPin('')
+    setErreur('')
+  }
+
+  async function handleConnexionAdmin(e) {
     e.preventDefault()
     setErreur('')
     setChargement(true)
@@ -18,6 +25,16 @@ function Connexion({ onConnexionReussie }) {
       onConnexionReussie(admin)
       return
     }
+
+    setChargement(false)
+    setErreur('Code PIN admin incorrect')
+    setPin('')
+  }
+
+  async function handleConnexionBoutique(e) {
+    e.preventDefault()
+    setErreur('')
+    setChargement(true)
 
     const { data, error } = await supabase
       .from('employes')
@@ -56,22 +73,65 @@ function Connexion({ onConnexionReussie }) {
     onConnexionReussie(data)
   }
 
+  const styleConteneur = {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100vh',
+    backgroundColor: '#f5f5f5',
+    padding: '20px',
+  }
+
+  const styleBoutonChoix = {
+    fontSize: '1.1rem',
+    padding: '16px 32px',
+    margin: '10px',
+    borderRadius: '10px',
+    border: 'none',
+    cursor: 'pointer',
+    fontWeight: 600,
+    width: '260px',
+  }
+
+  if (mode === 'choix') {
+    return (
+      <div style={styleConteneur}>
+        <h1>GESTION BOUTIQUE</h1>
+        <p>Choisissez votre type de connexion</p>
+
+        <button
+          onClick={() => setMode('boutique')}
+          style={{ ...styleBoutonChoix, backgroundColor: '#C9822A', color: 'white' }}
+        >
+          Connexion Boutique
+        </button>
+
+        <button
+          onClick={() => setMode('admin')}
+          style={{ ...styleBoutonChoix, backgroundColor: '#2B2620', color: 'white' }}
+        >
+          Connexion Admin
+        </button>
+
+        <a href="/inscription" style={{ color: '#6B6357', marginTop: '1.5rem', fontSize: '14px' }}>
+          Pas encore de compte ? Créer un compte
+        </a>
+      </div>
+    )
+  }
+
+  const estAdmin = mode === 'admin'
+
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      height: '100vh',
-      backgroundColor: '#f5f5f5'
-    }}>
+    <div style={styleConteneur}>
       <h1>GESTION BOUTIQUE</h1>
-      <p>Entrez votre code PIN pour continuer</p>
-      <form onSubmit={handleConnexion}>
+      <p>{estAdmin ? 'Connexion Admin (PIN à 6 chiffres)' : 'Connexion Boutique (PIN à 4 chiffres)'}</p>
+      <form onSubmit={estAdmin ? handleConnexionAdmin : handleConnexionBoutique}>
         <input
           type="password"
           inputMode="numeric"
-          maxLength="6"
+          maxLength={estAdmin ? '6' : '4'}
           value={pin}
           onChange={(e) => setPin(e.target.value)}
           placeholder="****"
@@ -81,15 +141,19 @@ function Connexion({ onConnexionReussie }) {
             letterSpacing: '1rem',
             width: '200px',
             padding: '0.5rem',
-            marginBottom: '1rem'
+            marginBottom: '1rem',
           }}
           autoFocus
         />
         <br />
-        <button type="submit" disabled={chargement} style={{
-          fontSize: '1.2rem',
-          padding: '0.5rem 2rem'
-        }}>
+        <button
+          type="submit"
+          disabled={chargement}
+          style={{
+            fontSize: '1.2rem',
+            padding: '0.5rem 2rem',
+          }}
+        >
           {chargement ? 'Connexion...' : 'Se connecter'}
         </button>
       </form>
@@ -113,10 +177,11 @@ function Connexion({ onConnexionReussie }) {
                   fontWeight: 600,
                 }}
               >
-                💬 WhatsApp
+                WhatsApp
               </a>
-              
-                <a href="tel:+22663732443"
+
+              <a
+                href="tel:+22663732443"
                 style={{
                   padding: '8px 14px',
                   borderRadius: '8px',
@@ -127,16 +192,27 @@ function Connexion({ onConnexionReussie }) {
                   fontWeight: 600,
                 }}
               >
-                📞 Appeler
+                Appeler
               </a>
             </div>
           )}
         </div>
       )}
 
-      <a href="/inscription" style={{ color: '#6B6357', marginTop: '1.5rem', fontSize: '14px' }}>
-        Pas encore de compte ? Créer un compte
-      </a>
+      <button
+        onClick={retourChoix}
+        style={{
+          marginTop: '1.5rem',
+          background: 'none',
+          border: 'none',
+          color: '#6B6357',
+          fontSize: '14px',
+          cursor: 'pointer',
+          textDecoration: 'underline',
+        }}
+      >
+        Retour
+      </button>
     </div>
   )
 }
