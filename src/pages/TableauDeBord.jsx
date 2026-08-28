@@ -28,6 +28,8 @@ function TableauDeBord({ setPageActive }) {
   const [dateDebutPerso, setDateDebutPerso] = useState('')
   const [dateFinPerso, setDateFinPerso] = useState('')
   const [dernieresVentes, setDernieresVentes] = useState([])
+  const [ventesRecentes, setVentesRecentes] = useState([])
+  const [annulationEnCours, setAnnulationEnCours] = useState(null)
 
   useEffect(() => {
     chargerDonnees()
@@ -76,13 +78,21 @@ function TableauDeBord({ setPageActive }) {
     const idEmployeCible = peutVoirFinances ? (employePerso || employe?.id) : employe?.id
 
     // --- Ventes ---
-        let requeteVentes = supabase.from('sales').select('id, total, mode_paiement, created_at, employe_id').eq('boutique_id', boutiqueId)
+    let requeteVentes = supabase.from('sales').select('id, total, mode_paiement, created_at, employe_id, annulee').eq('boutique_id', boutiqueId)
     if (filtrerParEmploye) requeteVentes = requeteVentes.eq('employe_id', idEmployeCible)
     const { data: ventes } = await requeteVentes
 
-    const ventesFiltrees = filtrerParDate
+    const ventesToutesPeriode = filtrerParDate
       ? (ventes || []).filter((v) => new Date(v.created_at) >= debut && new Date(v.created_at) <= fin)
       : (ventes || [])
+
+    // Ventes actives (non annulées) pour les statistiques
+    const ventesFiltrees = ventesToutesPeriode.filter((v) => !v.annulee)
+
+    // --- Ventes récentes (avec bouton annuler) ---
+    const ventesTriees = [...ventesToutesPeriode].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 20)
+    setVentesRecentes(ventesTriees)
+
     // --- Dernières ventes (produits vendus) ---
     const idsVentesFiltrees = ventesFiltrees.map((v) => v.id)
     const dateParVente = {}
@@ -201,6 +211,89 @@ function TableauDeBord({ setPageActive }) {
     setChargement(false)
   }
 
+    async function annulerVente(vente) {
+    const confirmation = window.confirm(
+      `Annuler cette vente de ${Number(vente.total).toLocaleString('fr-FR')} FCFA ?\n\nLe stock des produits sera restauré, et le crédit associé (s'il y en a un) sera supprimé.`
+    )
+    if (!confirmation) return
+
+    setAnnulationEnCours(vente.id)
+
+    // 1. Récupérer les articles de la vente
+    const { data: articles, error: erreurArticles } = await supabase
+      .from('sale_items')
+      .select('*')
+      .eq('sale_id', vente.id)
+
+    if (erreurArticles) {
+      alert("Erreur lors de la récupération des articles de la vente : " + erreurArticles.message)
+      setAnnulationEnCours(null)
+      return
+    }
+
+    // 2. Remettre le stock pour chaque article
+    console.log('Articles trouvés :', articles)
+    for (const article of articles || []) {
+      console.log('Traitement article :', article)
+      const { data: produit, error: erreurProduit } = await supabase
+        .from('products')
+        .select('quantite')
+        .eq('id', article.product_id)
+        .single()
+      console.log('Produit trouvé :', produit, 'Erreur :', erreurProduit)
+
+      if (produit) {
+        const nouvelleQuantite = Number(produit.quantite) + Number(article.quantite)
+
+        const { error: erreurUpdateProduit } = await supabase
+          .from('products')
+          .update({ quantite: nouvelleQuantite })
+          .eq('id', article.product_id)
+        console.log('Résultat update produit :', erreurUpdateProduit)
+
+        const { error: erreurMouvement } = await supabase.from('stock_mouvements').insert({
+          boutique_id: boutiqueId,
+          produit_id: article.product_id,
+          employe_id: employe?.id,
+          type_mouvement: 'Entrée',
+          quantite: article.quantite,
+          motif: `Annulation vente n°${vente.id}`,
+        })
+        console.log('Résultat insertion mouvement :', erreurMouvement)
+      } else {
+        console.log('⚠️ Produit introuvable pour cet article, mouvement non créé :', article)
+      }
+    }
+
+    // 3. Si vente à crédit, supprimer le crédit associé (et ses paiements)
+    if (vente.mode_paiement === 'Crédit client') {
+      const { data: creditAssocie } = await supabase
+        .from('credits')
+        .select('id')
+        .eq('sale_id', vente.id)
+        .maybeSingle()
+
+      if (creditAssocie) {
+        await supabase.from('credit_paiements').delete().eq('credit_id', creditAssocie.id)
+        await supabase.from('credits').delete().eq('id', creditAssocie.id)
+      }
+    }
+
+    // 4. Marquer la vente comme annulée
+    const { error: erreurAnnulation } = await supabase
+      .from('sales')
+      .update({ annulee: true })
+      .eq('id', vente.id)
+
+    setAnnulationEnCours(null)
+
+    if (erreurAnnulation) {
+      alert("Erreur lors de l'annulation de la vente : " + erreurAnnulation.message)
+      return
+    }
+
+    chargerDonnees()
+  }
   const styleCarte = {
     flex: '1 1 200px',
     padding: '20px',
@@ -227,27 +320,27 @@ function TableauDeBord({ setPageActive }) {
   return (
     <div style={{ padding: '20px', fontFamily: 'Poppins, Arial, sans-serif' }}>
       <button
-  onClick={() => setPageActive('caisse')}
-  style={{
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    marginTop: '15px',
-    marginBottom: '15px',
-    padding: '14px 20px',
-    borderRadius: '10px',
-    border: 'none',
-    backgroundColor: '#C9822A',
-    color: 'white',
-    fontFamily: 'Poppins, Arial, sans-serif',
-    fontWeight: 600,
-    fontSize: '15px',
-    cursor: 'pointer',
-    boxShadow: '0 2px 8px rgba(43, 38, 32, 0.15)',
-  }}
->
-  🛒 Nouvelle vente
-</button>
+        onClick={() => setPageActive('caisse')}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          marginTop: '15px',
+          marginBottom: '15px',
+          padding: '14px 20px',
+          borderRadius: '10px',
+          border: 'none',
+          backgroundColor: '#C9822A',
+          color: 'white',
+          fontFamily: 'Poppins, Arial, sans-serif',
+          fontWeight: 600,
+          fontSize: '15px',
+          cursor: 'pointer',
+          boxShadow: '0 2px 8px rgba(43, 38, 32, 0.15)',
+        }}
+      >
+        🛒 Nouvelle vente
+      </button>
 
       <div style={{ display: 'flex', gap: '6px', marginTop: '15px', marginBottom: '20px', flexWrap: 'wrap' }}>
         {onglets.map((o) => (
@@ -409,7 +502,76 @@ function TableauDeBord({ setPageActive }) {
           )}
         </div>
       </div>
-            <div
+
+      <div
+        style={{
+          marginTop: '20px',
+          backgroundColor: 'white',
+          border: '1px solid #E6E0D6',
+          borderRadius: '10px',
+          padding: '18px',
+        }}
+      >
+        <h3 style={{ marginTop: 0, marginBottom: '12px' }}>Ventes récentes</h3>
+        {ventesRecentes.length === 0 ? (
+          <p style={{ color: '#6B6357' }}>Aucune vente sur cette période.</p>
+        ) : (
+          <table cellPadding="8" style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#F7F5F2' }}>
+                <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>N°</th>
+                <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Heure</th>
+                <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Paiement</th>
+                <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Montant</th>
+                <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Statut</th>
+                <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {ventesRecentes.map((vente) => (
+                <tr key={vente.id} style={{ borderTop: '1px solid #E6E0D6', backgroundColor: vente.annulee ? '#F7F5F2' : 'white' }}>
+                  <td>{vente.id}</td>
+                  <td>
+                    {new Date(vente.created_at).toLocaleDateString('fr-FR')}{' '}
+                    {new Date(vente.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                  <td>{vente.mode_paiement}</td>
+                  <td>{Number(vente.total).toLocaleString('fr-FR')} FCFA</td>
+                  <td>
+                    {vente.annulee ? (
+                      <span style={{ color: '#B71C1C', fontSize: '13px' }}>Annulée</span>
+                    ) : (
+                      <span style={{ color: '#2E7D32', fontSize: '13px' }}>Validée</span>
+                    )}
+                  </td>
+                  <td>
+                    {!vente.annulee && (
+                      <button
+                        onClick={() => annulerVente(vente)}
+                        disabled={annulationEnCours === vente.id}
+                        style={{
+                          padding: '5px 10px',
+                          border: '1px solid #E6E0D6',
+                          borderRadius: '6px',
+                          background: 'white',
+                          color: '#B71C1C',
+                          cursor: 'pointer',
+                          fontFamily: 'Poppins, Arial, sans-serif',
+                          fontSize: '12px',
+                        }}
+                      >
+                        {annulationEnCours === vente.id ? 'Annulation...' : 'Annuler'}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div
         style={{
           marginTop: '20px',
           backgroundColor: 'white',
