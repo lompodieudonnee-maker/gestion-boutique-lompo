@@ -30,7 +30,30 @@ function Connexion({ onConnexionReussie }) {
     setErreur('Code PIN admin incorrect')
     setPin('')
   }
+  async function verifierJourTravail(employeData) {
+    const joursSemaine = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi']
+    const aujourdhuiNom = joursSemaine[new Date().getDay()]
+    const aujourdhuiDate = new Date().toISOString().split('T')[0]
 
+    // 1. Vérifier s'il y a une exception ponctuelle pour aujourd'hui
+    const { data: exception } = await supabase
+      .from('exceptions_planning')
+      .select('travaille')
+      .eq('employe_id', employeData.id)
+      .eq('date', aujourdhuiDate)
+      .maybeSingle()
+
+    if (exception) {
+      return exception.travaille
+    }
+
+    // 2. Sinon, se baser sur le planning fixe
+    if (!employeData.jours_travail || employeData.jours_travail.length === 0) {
+      return true // pas de planning défini = pas de restriction
+    }
+
+    return employeData.jours_travail.includes(aujourdhuiNom)
+  }
   async function handleConnexionBoutique(e) {
     e.preventDefault()
     setErreur('')
@@ -68,7 +91,17 @@ function Connexion({ onConnexionReussie }) {
       setPin('')
       return
     }
+    if (data.role !== 'proprietaire') {
+      const estDeJour = await verifierJourTravail(data)
+      if (!estDeJour) {
+        setErreur("Vous n'êtes pas prévu(e) aujourd'hui. Contactez le gérant.")
+        setPin('')
+        return
+      }
+    }
 
+    localStorage.setItem('employeConnecte', JSON.stringify(data))
+    onConnexionReussie(data)
     localStorage.setItem('employeConnecte', JSON.stringify(data))
     onConnexionReussie(data)
   }

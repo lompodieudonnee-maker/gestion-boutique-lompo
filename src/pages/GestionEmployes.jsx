@@ -8,6 +8,16 @@ const PERMISSIONS = [
   { cle: 'peut_gerer_stock', label: 'Gérer le Stock' },
 ]
 
+const JOURS_SEMAINE = [
+  { cle: 'lundi', label: 'Lun' },
+  { cle: 'mardi', label: 'Mar' },
+  { cle: 'mercredi', label: 'Mer' },
+  { cle: 'jeudi', label: 'Jeu' },
+  { cle: 'vendredi', label: 'Ven' },
+  { cle: 'samedi', label: 'Sam' },
+  { cle: 'dimanche', label: 'Dim' },
+]
+
 function GestionEmployes() {
   const [employes, setEmployes] = useState([])
   const [chargement, setChargement] = useState(true)
@@ -16,6 +26,11 @@ function GestionEmployes() {
   const [nom, setNom] = useState('')
   const [pin, setPin] = useState('')
   const [role, setRole] = useState('employe')
+
+  const [planningOuvertId, setPlanningOuvertId] = useState(null)
+  const [exceptions, setExceptions] = useState([])
+  const [nouvelleExceptionDate, setNouvelleExceptionDate] = useState('')
+  const [nouvelleExceptionTravaille, setNouvelleExceptionTravaille] = useState('non')
 
   const employeConnecte = JSON.parse(localStorage.getItem('employeConnecte'))
   const boutiqueId = getBoutiqueId()
@@ -55,7 +70,7 @@ function GestionEmployes() {
         nom,
         pin,
         role,
-                boutique_id: boutiqueId,
+        boutique_id: boutiqueId,
         voir_finances: false,
         peut_gerer_fournisseurs: false,
       })
@@ -97,6 +112,92 @@ function GestionEmployes() {
       return
     }
     chargerEmployes()
+  }
+
+  // ============================================================
+  // PLANNING (jours fixes + exceptions ponctuelles)
+  // ============================================================
+
+  async function ouvrirPlanning(employe) {
+    if (planningOuvertId === employe.id) {
+      setPlanningOuvertId(null)
+      return
+    }
+    setPlanningOuvertId(employe.id)
+    await chargerExceptions(employe.id)
+  }
+
+  async function chargerExceptions(employeId) {
+    const { data } = await supabase
+      .from('exceptions_planning')
+      .select('*')
+      .eq('employe_id', employeId)
+      .order('date', { ascending: true })
+    setExceptions(data || [])
+  }
+
+    async function toggleJourTravail(employe, jourCle) {
+    const joursActuels = employe.jours_travail || []
+    const nouveauxJours = joursActuels.includes(jourCle)
+      ? joursActuels.filter((j) => j !== jourCle)
+      : [...joursActuels, jourCle]
+
+    // Mise à jour immédiate de l'affichage (sans attendre le serveur)
+    setEmployes((prev) =>
+      prev.map((e) => (e.id === employe.id ? { ...e, jours_travail: nouveauxJours } : e))
+    )
+
+    const { error } = await supabase
+      .from('employes')
+      .update({ jours_travail: nouveauxJours })
+      .eq('id', employe.id)
+
+    if (error) {
+      setErreur('Erreur lors de la mise à jour du planning')
+      chargerEmployes() // on recharge pour annuler le changement affiché si ça a échoué
+    }
+  }
+
+  async function reinitialiserPlanning(employe) {
+    if (!confirm("Réinitialiser le planning fixe de cet employé (il pourra travailler tous les jours) ?")) return
+    const { error } = await supabase
+      .from('employes')
+      .update({ jours_travail: null })
+      .eq('id', employe.id)
+
+    if (error) {
+      setErreur('Erreur lors de la réinitialisation du planning')
+      return
+    }
+    chargerEmployes()
+  }
+
+  async function ajouterException(employeId) {
+    if (!nouvelleExceptionDate) {
+      alert('Choisissez une date')
+      return
+    }
+
+    const { error } = await supabase.from('exceptions_planning').insert({
+      employe_id: employeId,
+      date: nouvelleExceptionDate,
+      travaille: nouvelleExceptionTravaille === 'oui',
+      boutique_id: boutiqueId,
+    })
+
+    if (error) {
+      alert('Erreur : ' + error.message)
+      return
+    }
+
+    setNouvelleExceptionDate('')
+    setNouvelleExceptionTravaille('non')
+    chargerExceptions(employeId)
+  }
+
+  async function supprimerException(id, employeId) {
+    await supabase.from('exceptions_planning').delete().eq('id', id)
+    chargerExceptions(employeId)
   }
 
   if (chargement) return <p style={{ padding: '20px' }}>Chargement...</p>
@@ -147,32 +248,118 @@ function GestionEmployes() {
             {PERMISSIONS.map((p) => (
               <th key={p.cle} style={{ padding: '10px', textAlign: 'center' }}>{p.label}</th>
             ))}
+            <th style={{ padding: '10px', textAlign: 'center' }}>Planning</th>
             <th style={{ padding: '10px' }}></th>
           </tr>
         </thead>
         <tbody>
           {employes.map((employe) => (
-            <tr key={employe.id} style={{ borderBottom: '1px solid #ddd' }}>
-              <td style={{ padding: '10px' }}>{employe.nom}</td>
-              <td style={{ padding: '10px' }}>{employe.role}</td>
-              {PERMISSIONS.map((p) => (
-                <td key={p.cle} style={{ padding: '10px', textAlign: 'center' }}>
-                  <input
-                    type="checkbox"
-                    checked={employe.role === 'proprietaire' ? true : !!employe[p.cle]}
-                    disabled={employe.role === 'proprietaire'}
-                    onChange={() => handleTogglePermission(employe, p.cle)}
-                  />
+            <>
+              <tr key={employe.id} style={{ borderBottom: '1px solid #ddd' }}>
+                <td style={{ padding: '10px' }}>{employe.nom}</td>
+                <td style={{ padding: '10px' }}>{employe.role}</td>
+                {PERMISSIONS.map((p) => (
+                  <td key={p.cle} style={{ padding: '10px', textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={employe.role === 'proprietaire' ? true : !!employe[p.cle]}
+                      disabled={employe.role === 'proprietaire'}
+                      onChange={() => handleTogglePermission(employe, p.cle)}
+                    />
+                  </td>
+                ))}
+                <td style={{ padding: '10px', textAlign: 'center' }}>
+                  {employe.role !== 'proprietaire' && (
+                    <button
+                      onClick={() => ouvrirPlanning(employe)}
+                      style={{ padding: '5px 10px', cursor: 'pointer' }}
+                    >
+                      {planningOuvertId === employe.id ? 'Fermer' : 'Gérer'}
+                    </button>
+                  )}
                 </td>
-              ))}
-              <td style={{ padding: '10px' }}>
-                {employe.role !== 'proprietaire' && (
-                  <button onClick={() => handleSupprimer(employe.id)} style={{ color: 'red', border: 'none', background: 'none', cursor: 'pointer' }}>
-                    Supprimer
-                  </button>
-                )}
-              </td>
-            </tr>
+                <td style={{ padding: '10px' }}>
+                  {employe.role !== 'proprietaire' && (
+                    <button onClick={() => handleSupprimer(employe.id)} style={{ color: 'red', border: 'none', background: 'none', cursor: 'pointer' }}>
+                      Supprimer
+                    </button>
+                  )}
+                </td>
+              </tr>
+
+              {planningOuvertId === employe.id && (
+                <tr>
+                  <td colSpan={PERMISSIONS.length + 4} style={{ padding: '15px', backgroundColor: '#faf8f5', border: '1px solid #E6E0D6' }}>
+                    <strong>Planning fixe de {employe.nom}</strong>
+                    <p style={{ fontSize: '13px', color: '#6B6357', margin: '4px 0 10px' }}>
+                      Cochez les jours où {employe.nom} travaille. Si aucun jour n'est coché, il n'y a aucune restriction (il peut se connecter tous les jours).
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                      {JOURS_SEMAINE.map((jour) => (
+                        <label key={jour.cle} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <input
+                            type="checkbox"
+                            checked={(employe.jours_travail || []).includes(jour.cle)}
+                            onChange={() => toggleJourTravail(employe, jour.cle)}
+                          />
+                          {jour.label}
+                        </label>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => reinitialiserPlanning(employe)}
+                      style={{ fontSize: '13px', color: '#6B6357', background: 'none', border: '1px solid #E6E0D6', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', marginBottom: '15px' }}
+                    >
+                      Réinitialiser (aucune restriction)
+                    </button>
+
+                    <hr style={{ border: 'none', borderTop: '1px solid #E6E0D6', margin: '10px 0' }} />
+
+                    <strong>Exceptions ponctuelles</strong>
+                    <p style={{ fontSize: '13px', color: '#6B6357', margin: '4px 0 10px' }}>
+                      Pour un cas particulier à une date précise (ex: il travaille exceptionnellement un jour normalement off, ou l'inverse).
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '10px' }}>
+                      <input
+                        type="date"
+                        value={nouvelleExceptionDate}
+                        onChange={(e) => setNouvelleExceptionDate(e.target.value)}
+                        style={{ padding: '6px' }}
+                      />
+                      <select
+                        value={nouvelleExceptionTravaille}
+                        onChange={(e) => setNouvelleExceptionTravaille(e.target.value)}
+                        style={{ padding: '6px' }}
+                      >
+                        <option value="oui">Travaille ce jour-là</option>
+                        <option value="non">Ne travaille pas ce jour-là</option>
+                      </select>
+                      <button onClick={() => ajouterException(employe.id)} style={{ padding: '6px 12px', cursor: 'pointer' }}>
+                        Ajouter
+                      </button>
+                    </div>
+
+                    {exceptions.length === 0 ? (
+                      <p style={{ fontSize: '13px', color: '#6B6357' }}>Aucune exception enregistrée.</p>
+                    ) : (
+                      <ul style={{ paddingLeft: '20px', margin: 0 }}>
+                        {exceptions.map((exc) => (
+                          <li key={exc.id} style={{ fontSize: '13px', marginBottom: '4px' }}>
+                            {new Date(exc.date).toLocaleDateString('fr-FR')} — {exc.travaille ? 'Travaille exceptionnellement' : 'Absent exceptionnellement'}{' '}
+                            <button
+                              onClick={() => supprimerException(exc.id, employe.id)}
+                              style={{ color: 'red', border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}
+                            >
+                              (supprimer)
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
+                </tr>
+              )}
+            </>
           ))}
         </tbody>
       </table>
