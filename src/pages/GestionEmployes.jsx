@@ -33,13 +33,38 @@ function GestionEmployes() {
   const [nouvelleExceptionTravaille, setNouvelleExceptionTravaille] = useState('non')
 
   const employeConnecte = JSON.parse(localStorage.getItem('employeConnecte'))
-  const boutiqueId = getBoutiqueId()
+  const estSuperadmin = employeConnecte?.role === 'superadmin'
+
+  const [boutiques, setBoutiques] = useState([])
+  const [boutiqueSelectionnee, setBoutiqueSelectionnee] = useState('')
+
+  const boutiqueId = estSuperadmin ? boutiqueSelectionnee : getBoutiqueId()
 
   useEffect(() => {
-    chargerEmployes()
+    if (estSuperadmin) {
+      chargerBoutiques()
+    } else {
+      chargerEmployes()
+    }
   }, [])
 
+  useEffect(() => {
+    if (estSuperadmin && boutiqueSelectionnee) {
+      chargerEmployes()
+    }
+  }, [boutiqueSelectionnee])
+
+  async function chargerBoutiques() {
+    const { data } = await supabase
+      .from('boutiques')
+      .select('id, nom')
+      .order('nom', { ascending: true })
+    setBoutiques(data || [])
+    setChargement(false)
+  }
+
   async function chargerEmployes() {
+    if (!boutiqueId) return
     setChargement(true)
     const { data, error } = await supabase
       .from('employes')
@@ -58,6 +83,11 @@ function GestionEmployes() {
   async function handleAjouterEmploye(e) {
     e.preventDefault()
     setErreur('')
+
+    if (!boutiqueId) {
+      setErreur('Choisissez une boutique')
+      return
+    }
 
     if (pin.length !== 4) {
       setErreur('Le code PIN doit contenir 4 chiffres')
@@ -108,7 +138,7 @@ function GestionEmployes() {
       .eq('id', id)
 
     if (error) {
-      setErreur("Erreur lors de la suppression")
+      setErreur("Erreur lors de la suppression (cet employé a peut-être des ventes liées)")
       return
     }
     chargerEmployes()
@@ -136,13 +166,12 @@ function GestionEmployes() {
     setExceptions(data || [])
   }
 
-    async function toggleJourTravail(employe, jourCle) {
+  async function toggleJourTravail(employe, jourCle) {
     const joursActuels = employe.jours_travail || []
     const nouveauxJours = joursActuels.includes(jourCle)
       ? joursActuels.filter((j) => j !== jourCle)
       : [...joursActuels, jourCle]
 
-    // Mise à jour immédiate de l'affichage (sans attendre le serveur)
     setEmployes((prev) =>
       prev.map((e) => (e.id === employe.id ? { ...e, jours_travail: nouveauxJours } : e))
     )
@@ -154,7 +183,7 @@ function GestionEmployes() {
 
     if (error) {
       setErreur('Erreur lors de la mise à jour du planning')
-      chargerEmployes() // on recharge pour annuler le changement affiché si ça a échoué
+      chargerEmployes()
     }
   }
 
@@ -208,161 +237,185 @@ function GestionEmployes() {
 
       {erreur && <p style={{ color: 'red' }}>{erreur}</p>}
 
-      <form onSubmit={handleAjouterEmploye} style={{ marginBottom: '30px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
-        <h3>Ajouter un employé</h3>
-        <input
-          type="text"
-          placeholder="Nom"
-          value={nom}
-          onChange={(e) => setNom(e.target.value)}
-          required
-          style={{ marginRight: '10px', padding: '8px' }}
-        />
-        <input
-          type="password"
-          inputMode="numeric"
-          maxLength="4"
-          placeholder="Code PIN (4 chiffres)"
-          value={pin}
-          onChange={(e) => setPin(e.target.value)}
-          required
-          style={{ marginRight: '10px', padding: '8px', width: '150px' }}
-        />
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          style={{ marginRight: '10px', padding: '8px' }}
-        >
-          <option value="employe">Employé</option>
-          <option value="proprietaire">Propriétaire</option>
-        </select>
-        <button type="submit" style={{ padding: '8px 16px' }}>Ajouter</button>
-      </form>
-
-      <h3>Liste des employés</h3>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ backgroundColor: '#333', color: 'white' }}>
-            <th style={{ padding: '10px', textAlign: 'left' }}>Nom</th>
-            <th style={{ padding: '10px', textAlign: 'left' }}>Rôle</th>
-            {PERMISSIONS.map((p) => (
-              <th key={p.cle} style={{ padding: '10px', textAlign: 'center' }}>{p.label}</th>
+      {estSuperadmin && (
+        <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#EDF1F5', borderRadius: '8px' }}>
+          <label style={{ display: 'block', fontSize: '13px', color: '#37474F', marginBottom: '6px', fontWeight: 600 }}>
+            🏪 Choisir une boutique à gérer
+          </label>
+          <select
+            value={boutiqueSelectionnee}
+            onChange={(e) => setBoutiqueSelectionnee(e.target.value)}
+            style={{ padding: '8px 12px', minWidth: '250px' }}
+          >
+            <option value="">-- Sélectionner une boutique --</option>
+            {boutiques.map((b) => (
+              <option key={b.id} value={b.id}>{b.nom}</option>
             ))}
-            <th style={{ padding: '10px', textAlign: 'center' }}>Planning</th>
-            <th style={{ padding: '10px' }}></th>
-          </tr>
-        </thead>
-        <tbody>
-          {employes.map((employe) => (
-            <>
-              <tr key={employe.id} style={{ borderBottom: '1px solid #ddd' }}>
-                <td style={{ padding: '10px' }}>{employe.nom}</td>
-                <td style={{ padding: '10px' }}>{employe.role}</td>
+          </select>
+        </div>
+      )}
+
+      {estSuperadmin && !boutiqueSelectionnee ? (
+        <p style={{ color: '#6B6357' }}>Choisissez une boutique ci-dessus pour voir et gérer ses employés.</p>
+      ) : (
+        <>
+          <form onSubmit={handleAjouterEmploye} style={{ marginBottom: '30px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
+            <h3>Ajouter un employé</h3>
+            <input
+              type="text"
+              placeholder="Nom"
+              value={nom}
+              onChange={(e) => setNom(e.target.value)}
+              required
+              style={{ marginRight: '10px', padding: '8px' }}
+            />
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength="4"
+              placeholder="Code PIN (4 chiffres)"
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+              required
+              style={{ marginRight: '10px', padding: '8px', width: '150px' }}
+            />
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              style={{ marginRight: '10px', padding: '8px' }}
+            >
+              <option value="employe">Employé</option>
+              <option value="proprietaire">Propriétaire</option>
+            </select>
+            <button type="submit" style={{ padding: '8px 16px' }}>Ajouter</button>
+          </form>
+
+          <h3>Liste des employés</h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#333', color: 'white' }}>
+                <th style={{ padding: '10px', textAlign: 'left' }}>Nom</th>
+                <th style={{ padding: '10px', textAlign: 'left' }}>Rôle</th>
                 {PERMISSIONS.map((p) => (
-                  <td key={p.cle} style={{ padding: '10px', textAlign: 'center' }}>
-                    <input
-                      type="checkbox"
-                      checked={employe.role === 'proprietaire' ? true : !!employe[p.cle]}
-                      disabled={employe.role === 'proprietaire'}
-                      onChange={() => handleTogglePermission(employe, p.cle)}
-                    />
-                  </td>
+                  <th key={p.cle} style={{ padding: '10px', textAlign: 'center' }}>{p.label}</th>
                 ))}
-                <td style={{ padding: '10px', textAlign: 'center' }}>
-                  {employe.role !== 'proprietaire' && (
-                    <button
-                      onClick={() => ouvrirPlanning(employe)}
-                      style={{ padding: '5px 10px', cursor: 'pointer' }}
-                    >
-                      {planningOuvertId === employe.id ? 'Fermer' : 'Gérer'}
-                    </button>
-                  )}
-                </td>
-                <td style={{ padding: '10px' }}>
-                  {employe.role !== 'proprietaire' && (
-                    <button onClick={() => handleSupprimer(employe.id)} style={{ color: 'red', border: 'none', background: 'none', cursor: 'pointer' }}>
-                      Supprimer
-                    </button>
-                  )}
-                </td>
+                <th style={{ padding: '10px', textAlign: 'center' }}>Planning</th>
+                <th style={{ padding: '10px' }}></th>
               </tr>
+            </thead>
+            <tbody>
+              {employes.map((employe) => (
+                <>
+                  <tr key={employe.id} style={{ borderBottom: '1px solid #ddd' }}>
+                    <td style={{ padding: '10px' }}>{employe.nom}</td>
+                    <td style={{ padding: '10px' }}>{employe.role}</td>
+                    {PERMISSIONS.map((p) => (
+                      <td key={p.cle} style={{ padding: '10px', textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={employe.role === 'proprietaire' ? true : !!employe[p.cle]}
+                          disabled={employe.role === 'proprietaire'}
+                          onChange={() => handleTogglePermission(employe, p.cle)}
+                        />
+                      </td>
+                    ))}
+                    <td style={{ padding: '10px', textAlign: 'center' }}>
+                      {employe.role !== 'proprietaire' && (
+                        <button
+                          onClick={() => ouvrirPlanning(employe)}
+                          style={{ padding: '5px 10px', cursor: 'pointer' }}
+                        >
+                          {planningOuvertId === employe.id ? 'Fermer' : 'Gérer'}
+                        </button>
+                      )}
+                    </td>
+                    <td style={{ padding: '10px' }}>
+                      {employe.role !== 'proprietaire' && (
+                        <button onClick={() => handleSupprimer(employe.id)} style={{ color: 'red', border: 'none', background: 'none', cursor: 'pointer' }}>
+                          Supprimer
+                        </button>
+                      )}
+                    </td>
+                  </tr>
 
-              {planningOuvertId === employe.id && (
-                <tr>
-                  <td colSpan={PERMISSIONS.length + 4} style={{ padding: '15px', backgroundColor: '#faf8f5', border: '1px solid #E6E0D6' }}>
-                    <strong>Planning fixe de {employe.nom}</strong>
-                    <p style={{ fontSize: '13px', color: '#6B6357', margin: '4px 0 10px' }}>
-                      Cochez les jours où {employe.nom} travaille. Si aucun jour n'est coché, il n'y a aucune restriction (il peut se connecter tous les jours).
-                    </p>
-                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
-                      {JOURS_SEMAINE.map((jour) => (
-                        <label key={jour.cle} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  {planningOuvertId === employe.id && (
+                    <tr>
+                      <td colSpan={PERMISSIONS.length + 4} style={{ padding: '15px', backgroundColor: '#faf8f5', border: '1px solid #E6E0D6' }}>
+                        <strong>Planning fixe de {employe.nom}</strong>
+                        <p style={{ fontSize: '13px', color: '#6B6357', margin: '4px 0 10px' }}>
+                          Cochez les jours où {employe.nom} travaille. Si aucun jour n'est coché, il n'y a aucune restriction (il peut se connecter tous les jours).
+                        </p>
+                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                          {JOURS_SEMAINE.map((jour) => (
+                            <label key={jour.cle} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                              <input
+                                type="checkbox"
+                                checked={(employe.jours_travail || []).includes(jour.cle)}
+                                onChange={() => toggleJourTravail(employe, jour.cle)}
+                              />
+                              {jour.label}
+                            </label>
+                          ))}
+                        </div>
+                        <button
+                          onClick={() => reinitialiserPlanning(employe)}
+                          style={{ fontSize: '13px', color: '#6B6357', background: 'none', border: '1px solid #E6E0D6', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', marginBottom: '15px' }}
+                        >
+                          Réinitialiser (aucune restriction)
+                        </button>
+
+                        <hr style={{ border: 'none', borderTop: '1px solid #E6E0D6', margin: '10px 0' }} />
+
+                        <strong>Exceptions ponctuelles</strong>
+                        <p style={{ fontSize: '13px', color: '#6B6357', margin: '4px 0 10px' }}>
+                          Pour un cas particulier à une date précise (ex: il travaille exceptionnellement un jour normalement off, ou l'inverse).
+                        </p>
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '10px' }}>
                           <input
-                            type="checkbox"
-                            checked={(employe.jours_travail || []).includes(jour.cle)}
-                            onChange={() => toggleJourTravail(employe, jour.cle)}
+                            type="date"
+                            value={nouvelleExceptionDate}
+                            onChange={(e) => setNouvelleExceptionDate(e.target.value)}
+                            style={{ padding: '6px' }}
                           />
-                          {jour.label}
-                        </label>
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => reinitialiserPlanning(employe)}
-                      style={{ fontSize: '13px', color: '#6B6357', background: 'none', border: '1px solid #E6E0D6', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', marginBottom: '15px' }}
-                    >
-                      Réinitialiser (aucune restriction)
-                    </button>
+                          <select
+                            value={nouvelleExceptionTravaille}
+                            onChange={(e) => setNouvelleExceptionTravaille(e.target.value)}
+                            style={{ padding: '6px' }}
+                          >
+                            <option value="oui">Travaille ce jour-là</option>
+                            <option value="non">Ne travaille pas ce jour-là</option>
+                          </select>
+                          <button onClick={() => ajouterException(employe.id)} style={{ padding: '6px 12px', cursor: 'pointer' }}>
+                            Ajouter
+                          </button>
+                        </div>
 
-                    <hr style={{ border: 'none', borderTop: '1px solid #E6E0D6', margin: '10px 0' }} />
-
-                    <strong>Exceptions ponctuelles</strong>
-                    <p style={{ fontSize: '13px', color: '#6B6357', margin: '4px 0 10px' }}>
-                      Pour un cas particulier à une date précise (ex: il travaille exceptionnellement un jour normalement off, ou l'inverse).
-                    </p>
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '10px' }}>
-                      <input
-                        type="date"
-                        value={nouvelleExceptionDate}
-                        onChange={(e) => setNouvelleExceptionDate(e.target.value)}
-                        style={{ padding: '6px' }}
-                      />
-                      <select
-                        value={nouvelleExceptionTravaille}
-                        onChange={(e) => setNouvelleExceptionTravaille(e.target.value)}
-                        style={{ padding: '6px' }}
-                      >
-                        <option value="oui">Travaille ce jour-là</option>
-                        <option value="non">Ne travaille pas ce jour-là</option>
-                      </select>
-                      <button onClick={() => ajouterException(employe.id)} style={{ padding: '6px 12px', cursor: 'pointer' }}>
-                        Ajouter
-                      </button>
-                    </div>
-
-                    {exceptions.length === 0 ? (
-                      <p style={{ fontSize: '13px', color: '#6B6357' }}>Aucune exception enregistrée.</p>
-                    ) : (
-                      <ul style={{ paddingLeft: '20px', margin: 0 }}>
-                        {exceptions.map((exc) => (
-                          <li key={exc.id} style={{ fontSize: '13px', marginBottom: '4px' }}>
-                            {new Date(exc.date).toLocaleDateString('fr-FR')} — {exc.travaille ? 'Travaille exceptionnellement' : 'Absent exceptionnellement'}{' '}
-                            <button
-                              onClick={() => supprimerException(exc.id, employe.id)}
-                              style={{ color: 'red', border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}
-                            >
-                              (supprimer)
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </td>
-                </tr>
-              )}
-            </>
-          ))}
-        </tbody>
-      </table>
+                        {exceptions.length === 0 ? (
+                          <p style={{ fontSize: '13px', color: '#6B6357' }}>Aucune exception enregistrée.</p>
+                        ) : (
+                          <ul style={{ paddingLeft: '20px', margin: 0 }}>
+                            {exceptions.map((exc) => (
+                              <li key={exc.id} style={{ fontSize: '13px', marginBottom: '4px' }}>
+                                {new Date(exc.date).toLocaleDateString('fr-FR')} — {exc.travaille ? 'Travaille exceptionnellement' : 'Absent exceptionnellement'}{' '}
+                                <button
+                                  onClick={() => supprimerException(exc.id, employe.id)}
+                                  style={{ color: 'red', border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}
+                                >
+                                  (supprimer)
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
     </div>
   )
 }

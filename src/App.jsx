@@ -141,8 +141,7 @@ const elementsMenu = elementsMenuComplet.filter((item) => {
               <span>{item.label}</span>
             </button>
           ))}
-
-          {estProprietaire && (
+          {(estProprietaire || estSuperAdmin) && (
             <button className={classeBouton('employes')} onClick={() => allerA('employes')}>
               <span>🔑</span>
               <span>Gestion Employés</span>
@@ -170,7 +169,7 @@ const elementsMenu = elementsMenuComplet.filter((item) => {
         {pageActive === 'clients' && <Clients />}
         {pageActive === 'fournisseurs' && <Fournisseurs />}
         {pageActive === 'depenses' && <Depenses />}
-        {pageActive === 'employes' && estProprietaire && <GestionEmployes />}
+                {pageActive === 'employes' && (estProprietaire || estSuperAdmin) && <GestionEmployes />}
         {pageActive === 'adminBoutiques' && estSuperAdmin && <AdminBoutiques />}
       </div>
     </div>
