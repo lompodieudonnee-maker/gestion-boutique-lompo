@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import './Stock.css';
 import { getBoutiqueId } from '../lib/boutique'
+
 function Inventaire() {
   const employeConnecte = JSON.parse(localStorage.getItem('employeConnecte'));
   const boutiqueId = getBoutiqueId()
@@ -11,6 +12,12 @@ function Inventaire() {
   const [chargement, setChargement] = useState(true);
   const [comptages, setComptages] = useState({});
   const [envoi, setEnvoi] = useState(false);
+
+  const [produitMouvement, setProduitMouvement] = useState('');
+  const [quantiteMouvement, setQuantiteMouvement] = useState('');
+  const [typeMouvement, setTypeMouvement] = useState('Entrée');
+  const [motifMouvement, setMotifMouvement] = useState('');
+  const [envoiMouvement, setEnvoiMouvement] = useState(false);
 
   useEffect(() => {
     if (boutiqueId) {
@@ -28,8 +35,9 @@ function Inventaire() {
 
     const { data: mouvementsData } = await supabase
       .from('stock_mouvements')
-      .select('produit_id, quantite')
-      .eq('boutique_id', boutiqueId);
+      .select('id, produit_id, quantite, type_mouvement, motif, created_at')
+      .eq('boutique_id', boutiqueId)
+      .order('created_at', { ascending: false });
 
     setProduits(produitsData || []);
     setMouvements(mouvementsData || []);
@@ -40,6 +48,11 @@ function Inventaire() {
     return mouvements
       .filter((m) => String(m.produit_id) === String(idProduit))
       .reduce((total, m) => total + Number(m.quantite), 0);
+  }
+
+  function nomProduit(idProduit) {
+    const p = produits.find((p) => String(p.id) === String(idProduit));
+    return p ? p.nom : 'Produit supprimé';
   }
 
   const valeurTotale = produits.reduce(
@@ -84,6 +97,42 @@ function Inventaire() {
     alert('Comptage validé et écarts enregistrés.');
   }
 
+  async function enregistrerMouvement() {
+    if (!produitMouvement) {
+      alert('Choisissez un produit');
+      return;
+    }
+    const qte = parseInt(quantiteMouvement, 10);
+    if (!qte || qte <= 0) {
+      alert('Entrez une quantité valide');
+      return;
+    }
+
+    setEnvoiMouvement(true);
+
+    const { error } = await supabase.from('stock_mouvements').insert({
+      boutique_id: boutiqueId,
+      produit_id: produitMouvement,
+      employe_id: employeConnecte?.id,
+      type_mouvement: typeMouvement,
+      quantite: typeMouvement === 'Entrée' ? qte : -qte,
+      motif: motifMouvement || (typeMouvement === 'Entrée' ? 'Entrée manuelle' : 'Sortie manuelle'),
+    });
+
+    setEnvoiMouvement(false);
+
+    if (error) {
+      alert('Erreur : ' + error.message);
+      return;
+    }
+
+    setProduitMouvement('');
+    setQuantiteMouvement('');
+    setMotifMouvement('');
+    chargerDonnees();
+    alert('Mouvement enregistré avec succès.');
+  }
+
   if (chargement) return <div className="stock-page">Chargement...</div>;
 
   return (
@@ -102,6 +151,12 @@ function Inventaire() {
           onClick={() => setOngletActif('comptage')}
         >
           Comptage physique
+        </button>
+        <button
+          className={ongletActif === 'mouvement' ? 'actif' : ''}
+          onClick={() => setOngletActif('mouvement')}
+        >
+          Entrée / Sortie
         </button>
       </div>
 
@@ -182,7 +237,7 @@ function Inventaire() {
             style={{
               marginTop: '15px',
               padding: '12px 24px',
-              background: 'linear-gradient(135deg, #ffa500, #ffcc70)',
+              background: '#C9822A',
               color: 'white',
               border: 'none',
               borderRadius: '8px',
@@ -193,6 +248,142 @@ function Inventaire() {
           >
             {envoi ? 'Enregistrement...' : 'Valider le comptage'}
           </button>
+        </>
+      )}
+
+      {ongletActif === 'mouvement' && (
+        <>
+          <p style={{ color: '#6B6357', marginBottom: '15px' }}>
+            Enregistrez rapidement une entrée (produit reçu) ou une sortie (produit retiré) de stock.
+          </p>
+
+          <div
+            style={{
+              backgroundColor: '#faf8f5',
+              border: '1px solid #E6E0D6',
+              borderRadius: '10px',
+              padding: '18px',
+              marginBottom: '25px',
+              maxWidth: '500px',
+            }}
+          >
+            <label style={{ display: 'block', fontSize: '13px', color: '#6B6357', marginBottom: '4px' }}>Produit</label>
+            <select
+              value={produitMouvement}
+              onChange={(e) => setProduitMouvement(e.target.value)}
+              style={{ width: '100%', padding: '9px', marginBottom: '12px', border: '1px solid #E6E0D6', borderRadius: '6px' }}
+            >
+              <option value="">-- Choisir un produit --</option>
+              {produits.map((p) => (
+                <option key={p.id} value={p.id}>{p.nom}</option>
+              ))}
+            </select>
+
+            <label style={{ display: 'block', fontSize: '13px', color: '#6B6357', marginBottom: '4px' }}>Type de mouvement</label>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
+              <button
+                type="button"
+                onClick={() => setTypeMouvement('Entrée')}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  borderRadius: '6px',
+                  border: typeMouvement === 'Entrée' ? '2px solid #2E7D32' : '1px solid #E6E0D6',
+                  backgroundColor: typeMouvement === 'Entrée' ? '#EAF5EC' : 'white',
+                  color: '#2E7D32',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Entrée
+              </button>
+              <button
+                type="button"
+                onClick={() => setTypeMouvement('Sortie')}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  borderRadius: '6px',
+                  border: typeMouvement === 'Sortie' ? '2px solid #B71C1C' : '1px solid #E6E0D6',
+                  backgroundColor: typeMouvement === 'Sortie' ? '#FBEAEA' : 'white',
+                  color: '#B71C1C',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Sortie
+              </button>
+            </div>
+
+            <label style={{ display: 'block', fontSize: '13px', color: '#6B6357', marginBottom: '4px' }}>Quantité</label>
+            <input
+              type="number"
+              value={quantiteMouvement}
+              onChange={(e) => setQuantiteMouvement(e.target.value)}
+              placeholder="Ex : 10"
+              style={{ width: '100%', padding: '9px', marginBottom: '12px', border: '1px solid #E6E0D6', borderRadius: '6px', boxSizing: 'border-box' }}
+            />
+
+            <label style={{ display: 'block', fontSize: '13px', color: '#6B6357', marginBottom: '4px' }}>Motif (optionnel)</label>
+            <input
+              type="text"
+              value={motifMouvement}
+              onChange={(e) => setMotifMouvement(e.target.value)}
+              placeholder="Ex : Casse, don, retour fournisseur..."
+              style={{ width: '100%', padding: '9px', marginBottom: '15px', border: '1px solid #E6E0D6', borderRadius: '6px', boxSizing: 'border-box' }}
+            />
+
+            <button
+              onClick={enregistrerMouvement}
+              disabled={envoiMouvement}
+              style={{
+                width: '100%',
+                padding: '12px',
+                background: '#C9822A',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontFamily: 'Poppins, sans-serif',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              {envoiMouvement ? 'Enregistrement...' : 'Enregistrer le mouvement'}
+            </button>
+          </div>
+
+          <h3 style={{ marginBottom: '10px' }}>Historique des mouvements</h3>
+          {mouvements.length === 0 ? (
+            <p style={{ color: '#6B6357' }}>Aucun mouvement enregistré.</p>
+          ) : (
+            <table className="stock-tableau">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Produit</th>
+                  <th>Type</th>
+                  <th>Quantité</th>
+                  <th>Motif</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mouvements.slice(0, 50).map((m) => (
+                  <tr key={m.id}>
+                    <td>
+                      {new Date(m.created_at).toLocaleDateString('fr-FR')}{' '}
+                      {new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                    <td>{nomProduit(m.produit_id)}</td>
+                    <td>{m.type_mouvement}</td>
+                    <td style={{ color: Number(m.quantite) >= 0 ? '#2E7D32' : '#B71C1C', fontWeight: 600 }}>
+                      {Number(m.quantite) >= 0 ? `+${m.quantite}` : m.quantite}
+                    </td>
+                    <td>{m.motif}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </>
       )}
     </div>
