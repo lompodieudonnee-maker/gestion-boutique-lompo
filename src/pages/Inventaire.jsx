@@ -253,9 +253,27 @@ function Inventaire() {
 
       {ongletActif === 'mouvement' && (
         <>
-          <p style={{ color: '#6B6357', marginBottom: '15px' }}>
-            Enregistrez rapidement une entrée (produit reçu) ou une sortie (produit retiré) de stock.
-          </p>
+                    <div
+            style={{
+              backgroundColor: '#FDECE1',
+              border: '1px solid #F3D2B0',
+              borderRadius: '10px',
+              padding: '14px 18px',
+              marginBottom: '20px',
+              fontSize: '13px',
+              color: '#6B4A1F',
+              maxWidth: '600px',
+            }}
+          >
+            <strong>⚠️ À utiliser uniquement pour les cas exceptionnels :</strong>
+            <ul style={{ margin: '8px 0 0', paddingLeft: '20px' }}>
+              <li><strong>Entrée</strong> : don, retour client, correction d'un oubli</li>
+              <li><strong>Sortie</strong> : casse, perte, vol, usage personnel, cadeau</li>
+            </ul>
+            <p style={{ margin: '8px 0 0' }}>
+              ❌ Ne pas utiliser pour une vente (déjà automatique en Caisse) ni pour un achat fournisseur (déjà automatique dans Fournisseurs/Commandes).
+            </p>
+          </div>
 
           <div
             style={{
