@@ -30,14 +30,26 @@ function TableauDeBord({ setPageActive }) {
   const [dernieresVentes, setDernieresVentes] = useState([])
   const [ventesRecentes, setVentesRecentes] = useState([])
   const [annulationEnCours, setAnnulationEnCours] = useState(null)
+    const [nomBoutique, setNomBoutique] = useState('')
+
+    useEffect(() => {
+    chargerNomBoutique()
+  }, [])
 
   useEffect(() => {
     chargerDonnees()
   }, [ongletPeriode, employePerso, dateDebutPerso, dateFinPerso])
+    async function chargerNomBoutique() {
+    const { data } = await supabase
+      .from('boutiques')
+      .select('nom')
+      .eq('id', boutiqueId)
+      .single()
+    if (data) setNomBoutique(data.nom)
+  }
 
-  function bornesPeriode() {
+    function bornesPeriode() {
     const maintenant = new Date()
-
     if (ongletPeriode === 'aujourdhui') {
       const debut = new Date()
       debut.setHours(0, 0, 0, 0)
@@ -72,8 +84,9 @@ function TableauDeBord({ setPageActive }) {
 
   async function chargerDonnees() {
     setChargement(true)
-
+      
     const { debut, fin, filtrerParDate } = bornesPeriode()
+      
     const filtrerParEmploye = ongletPeriode === 'perso'
     const idEmployeCible = peutVoirFinances ? (employePerso || employe?.id) : employe?.id
 
@@ -317,8 +330,13 @@ function TableauDeBord({ setPageActive }) {
     return <div style={{ padding: '20px' }}>Chargement du tableau de bord...</div>
   }
 
-  return (
+    return (
     <div style={{ padding: '20px', fontFamily: 'Poppins, Arial, sans-serif' }}>
+      {nomBoutique && (
+        <h2 style={{ margin: '0 0 10px 0', color: '#C9822A' }}>
+          🏪 {nomBoutique}
+        </h2>
+      )}
       <button
         onClick={() => setPageActive('caisse')}
         style={{
