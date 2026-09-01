@@ -5,6 +5,7 @@ function Produits() {
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
   const boutiqueId = getBoutiqueId()
   const [produits, setProduits] = useState([])
+  const [mouvements, setMouvements] = useState([])
   const [chargement, setChargement] = useState(true)
   const [recherche, setRecherche] = useState('')
 
@@ -26,17 +27,29 @@ function Produits() {
       .eq('boutique_id', boutiqueId)
       .order('created_at', { ascending: false })
 
+    const { data: mouvementsData } = await supabase
+      .from('stock_mouvements')
+      .select('produit_id, quantite')
+      .eq('boutique_id', boutiqueId)
+
     if (error) {
       console.error('Erreur de chargement :', error)
     } else {
       setProduits(data)
     }
+    setMouvements(mouvementsData || [])
     setChargement(false)
   }
 
   useEffect(() => {
     chargerProduits()
   }, [])
+
+  function quantiteActuelle(idProduit) {
+    return mouvements
+      .filter((m) => String(m.produit_id) === String(idProduit))
+      .reduce((total, m) => total + Number(m.quantite), 0)
+  }
 
   function reinitialiserFormulaire() {
     setNom('')
@@ -52,22 +65,35 @@ function Produits() {
   async function ajouterProduit(e) {
     e.preventDefault()
 
-    const { error } = await supabase.from('products').insert({
+    const { data: nouveauProduit, error } = await supabase.from('products').insert({
       nom: nom,
       categorie: categorie,
       prix_achat: parseFloat(prixAchat),
       prix_vente: parseFloat(prixVente),
-      quantite: parseInt(quantite),
+      quantite: 0,
       seuil_alerte: parseInt(seuilAlerte),
       boutique_id: boutiqueId,
-    })
+    }).select().single()
 
     if (error) {
       alert('Erreur lors de l\'ajout : ' + error.message)
-    } else {
-      reinitialiserFormulaire()
-      chargerProduits()
+      return
     }
+
+    const quantiteInitiale = parseInt(quantite) || 0
+    if (quantiteInitiale > 0) {
+      await supabase.from('stock_mouvements').insert({
+        boutique_id: boutiqueId,
+        produit_id: nouveauProduit.id,
+        employe_id: employe?.id,
+        type_mouvement: 'Entrée',
+        quantite: quantiteInitiale,
+        motif: 'Stock initial à la création du produit',
+      })
+    }
+
+    reinitialiserFormulaire()
+    chargerProduits()
   }
 
   function commencerModification(produit) {
@@ -77,7 +103,7 @@ function Produits() {
     setCategorie(produit.categorie || '')
     setPrixAchat(produit.prix_achat)
     setPrixVente(produit.prix_vente)
-    setQuantite(produit.quantite)
+    setQuantite('')
     setSeuilAlerte(produit.seuil_alerte || '')
   }
 
@@ -91,7 +117,6 @@ function Produits() {
         categorie: categorie,
         prix_achat: parseFloat(prixAchat),
         prix_vente: parseFloat(prixVente),
-        quantite: parseInt(quantite),
         seuil_alerte: parseInt(seuilAlerte),
       })
       .eq('id', idEnEdition)
@@ -192,10 +217,18 @@ function Produits() {
           <input style={styleInput} type="number" value={prixVente} onChange={(e) => setPrixVente(e.target.value)} />
         </div>
 
-        <div style={styleChamp}>
-          <label>Quantité : </label><br />
-          <input style={styleInput} type="number" value={quantite} onChange={(e) => setQuantite(e.target.value)} />
-        </div>
+        {!modeEdition && (
+          <div style={styleChamp}>
+            <label>Quantité initiale : </label><br />
+            <input style={styleInput} type="number" value={quantite} onChange={(e) => setQuantite(e.target.value)} />
+          </div>
+        )}
+
+        {modeEdition && (
+          <p style={{ fontSize: '13px', color: '#6B6357', maxWidth: '260px' }}>
+            Pour changer la quantité de ce produit, utilisez Fournisseurs (achat) ou Inventaire → Entrée/Sortie.
+          </p>
+        )}
 
         <div style={styleChamp}>
           <label>Seuil d'alerte : </label><br />
@@ -222,11 +255,11 @@ function Produits() {
       <h2>Liste des produits</h2>
 
       <p style={{ fontSize: '15px', fontWeight: 600, color: '#2B2620', marginBottom: '4px' }}>
-  Valeur totale du stock : {produitsFiltres.reduce((total, p) => total + p.prix_achat * p.quantite, 0).toLocaleString()} FCFA
-</p>
-<p style={{ fontSize: '15px', fontWeight: 600, color: '#2B2620', marginBottom: '16px' }}>
-  Bénéfice total du stock : {produitsFiltres.reduce((total, p) => total + (p.prix_vente - p.prix_achat) * p.quantite, 0).toLocaleString()} FCFA
-</p>
+        Valeur totale du stock : {produitsFiltres.reduce((total, p) => total + p.prix_achat * quantiteActuelle(p.id), 0).toLocaleString()} FCFA
+      </p>
+      <p style={{ fontSize: '15px', fontWeight: 600, color: '#2B2620', marginBottom: '16px' }}>
+        Bénéfice total du stock : {produitsFiltres.reduce((total, p) => total + (p.prix_vente - p.prix_achat) * quantiteActuelle(p.id), 0).toLocaleString()} FCFA
+      </p>
 
       {chargement ? (
         <p style={{ color: '#6B6357' }}>Chargement...</p>
@@ -248,22 +281,25 @@ function Produits() {
             </tr>
           </thead>
           <tbody>
-            {produitsFiltres.map((p) => (
-              <tr key={p.id} style={{ backgroundColor: p.quantite <= p.seuil_alerte ? '#FDECE1' : 'white', borderTop: '1px solid #E6E0D6' }}>
-                <td>{p.nom}</td>
-                <td>{p.categorie}</td>
-                <td>{p.prix_achat} FCFA</td>
-                <td>{p.prix_vente} FCFA</td>
-                <td>{p.quantite}</td>
-                <td>{(p.prix_vente - p.prix_achat).toLocaleString()} FCFA</td>
-                <td>{((p.prix_vente - p.prix_achat) * p.quantite).toLocaleString()} FCFA</td>
-                <td>{p.quantite <= p.seuil_alerte ? '⚠️' : ''}</td>
-                <td>
-                  <button style={styleBoutonAction} onClick={() => commencerModification(p)}>Modifier</button>
-                  <button style={{ ...styleBoutonAction, color: '#B71C1C' }} onClick={() => supprimerProduit(p.id, p.nom)}>Supprimer</button>
-                </td>
-              </tr>
-            ))}
+            {produitsFiltres.map((p) => {
+              const qte = quantiteActuelle(p.id)
+              return (
+                <tr key={p.id} style={{ backgroundColor: qte <= p.seuil_alerte ? '#FDECE1' : 'white', borderTop: '1px solid #E6E0D6' }}>
+                  <td>{p.nom}</td>
+                  <td>{p.categorie}</td>
+                  <td>{p.prix_achat} FCFA</td>
+                  <td>{p.prix_vente} FCFA</td>
+                  <td>{qte}</td>
+                  <td>{(p.prix_vente - p.prix_achat).toLocaleString()} FCFA</td>
+                  <td>{((p.prix_vente - p.prix_achat) * qte).toLocaleString()} FCFA</td>
+                  <td>{qte <= p.seuil_alerte ? '⚠️' : ''}</td>
+                  <td>
+                    <button style={styleBoutonAction} onClick={() => commencerModification(p)}>Modifier</button>
+                    <button style={{ ...styleBoutonAction, color: '#B71C1C' }} onClick={() => supprimerProduit(p.id, p.nom)}>Supprimer</button>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       )}
