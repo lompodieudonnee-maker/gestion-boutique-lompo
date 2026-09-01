@@ -18,6 +18,7 @@ function Stock() {
   const [quantite, setQuantite] = useState('');
   const [motif, setMotif] = useState('');
   const [envoi, setEnvoi] = useState(false);
+    const [rechercheProduit, setRechercheProduit] = useState('');
 
   useEffect(() => {
     if (boutiqueId) {
@@ -45,11 +46,15 @@ function Stock() {
   }
 
   
-  function quantiteActuelle(idProduit) {
-  return mouvements
-    .filter((m) => String(m.produit_id) === String(idProduit))
-    .reduce((total, m) => total + Number(m.quantite), 0);
-}
+    function quantiteActuelle(idProduit) {
+    return mouvements
+      .filter((m) => String(m.produit_id) === String(idProduit))
+      .reduce((total, m) => total + Number(m.quantite), 0);
+  }
+
+  const produitsFiltres = produits.filter((p) =>
+    p.nom.toLowerCase().includes(rechercheProduit.toLowerCase())
+  );
 
   async function soumettreAjustement(e) {
     e.preventDefault();
@@ -89,9 +94,17 @@ function Stock() {
 
   return (
     <div className="stock-page">
-      <h1>Stock</h1>
+           <h1>Stock</h1>
 
-      <div className="stock-onglets">
+      <input
+        type="text"
+        placeholder="🔍 Rechercher un produit..."
+        value={rechercheProduit}
+        onChange={(e) => setRechercheProduit(e.target.value)}
+        style={{ width: '100%', maxWidth: '400px', padding: '10px 12px', marginBottom: '16px', border: '1px solid #E6E0D6', borderRadius: '8px', boxSizing: 'border-box' }}
+      />
+
+      <div className="stock-onglets"> 
         <button
           className={ongletActif === 'vue' ? 'actif' : ''}
           onClick={() => setOngletActif('vue')}
@@ -121,10 +134,11 @@ function Stock() {
               <th>Statut</th>
             </tr>
           </thead>
-          <tbody>
-            {produits.map((p) => {
+                    <tbody>
+            {produitsFiltres.map((p) => {
               const qte = quantiteActuelle(p.id);
               const alerte = p.seuil_alerte != null && qte <= p.seuil_alerte;
+            
               return (
                 <tr key={p.id} className={alerte ? 'ligne-alerte' : ''}>
                   <td>{p.nom}</td>
@@ -169,8 +183,8 @@ function Stock() {
           <label>
             Produit
             <select value={produitId} onChange={(e) => setProduitId(e.target.value)} required>
-              <option value="">-- Choisir un produit --</option>
-              {produits.map((p) => (
+                            <option value="">-- Choisir un produit --</option>
+              {produitsFiltres.map((p) => (
                 <option key={p.id} value={p.id}>{p.nom}</option>
               ))}
             </select>
