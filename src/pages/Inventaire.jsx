@@ -18,6 +18,7 @@ function Inventaire() {
   const [typeMouvement, setTypeMouvement] = useState('Entrée');
   const [motifMouvement, setMotifMouvement] = useState('');
   const [envoiMouvement, setEnvoiMouvement] = useState(false);
+    const [rechercheProduit, setRechercheProduit] = useState('');
 
   useEffect(() => {
     if (boutiqueId) {
@@ -54,6 +55,9 @@ function Inventaire() {
     const p = produits.find((p) => String(p.id) === String(idProduit));
     return p ? p.nom : 'Produit supprimé';
   }
+   const produitsFiltres = produits.filter((p) =>
+    p.nom.toLowerCase().includes(rechercheProduit.toLowerCase())
+  ); 
 
   const valeurTotale = produits.reduce(
     (total, p) => total + quantiteActuelle(p.id) * Number(p.prix_achat || 0),
@@ -137,9 +141,17 @@ function Inventaire() {
 
   return (
     <div className="stock-page">
-      <h1>Inventaire</h1>
+           <h1>Inventaire</h1>
 
-      <div className="stock-onglets">
+      <input
+        type="text"
+        placeholder="🔍 Rechercher un produit..."
+        value={rechercheProduit}
+        onChange={(e) => setRechercheProduit(e.target.value)}
+        style={{ width: '100%', maxWidth: '400px', padding: '10px 12px', marginBottom: '16px', border: '1px solid #E6E0D6', borderRadius: '8px', boxSizing: 'border-box' }}
+      />
+
+      <div className="stock-onglets"> 
         <button
           className={ongletActif === 'valorisation' ? 'actif' : ''}
           onClick={() => setOngletActif('valorisation')}
@@ -171,8 +183,8 @@ function Inventaire() {
                 <th>Valeur</th>
               </tr>
             </thead>
-            <tbody>
-              {produits.map((p) => {
+                        <tbody>
+              {produitsFiltres.map((p) => {
                 const qte = quantiteActuelle(p.id);
                 const valeur = qte * Number(p.prix_achat || 0);
                 return (
@@ -206,8 +218,8 @@ function Inventaire() {
                 <th>Écart</th>
               </tr>
             </thead>
-            <tbody>
-              {produits.map((p) => {
+                        <tbody>
+              {produitsFiltres.map((p) => {
                 const qteSysteme = quantiteActuelle(p.id);
                 const saisie = comptages[p.id];
                 const ecart = saisie !== undefined && saisie !== '' ? parseInt(saisie, 10) - qteSysteme : null;
@@ -291,8 +303,8 @@ function Inventaire() {
               onChange={(e) => setProduitMouvement(e.target.value)}
               style={{ width: '100%', padding: '9px', marginBottom: '12px', border: '1px solid #E6E0D6', borderRadius: '6px' }}
             >
-              <option value="">-- Choisir un produit --</option>
-              {produits.map((p) => (
+                            <option value="">-- Choisir un produit --</option>
+              {produitsFiltres.map((p) => (
                 <option key={p.id} value={p.id}>{p.nom}</option>
               ))}
             </select>
