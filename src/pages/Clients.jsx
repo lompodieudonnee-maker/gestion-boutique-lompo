@@ -7,6 +7,7 @@ function Clients() {
   const boutiqueId = getBoutiqueId()
 
   const [clients, setClients] = useState([])
+    const [rechercheClient, setRechercheClient] = useState('')
   const [clientSelectionne, setClientSelectionne] = useState(null)
   const [credits, setCredits] = useState([])
   const [paiementsParCredit, setPaiementsParCredit] = useState({})
@@ -233,7 +234,7 @@ function Clients() {
     fontFamily: 'Poppins, Arial, sans-serif',
   }
 
-  const styleCarteFormulaire = {
+   const styleCarteFormulaire = {
     marginBottom: '20px',
     padding: '18px',
     backgroundColor: 'white',
@@ -241,6 +242,10 @@ function Clients() {
     borderRadius: '10px',
     boxShadow: '0 2px 8px rgba(43, 38, 32, 0.06)',
   }
+
+  const clientsFiltres = clients.filter((c) =>
+    c.nom.toLowerCase().includes(rechercheClient.toLowerCase())
+  )
 
   return (
     <div style={{ display: 'flex', padding: '20px', gap: '30px', fontFamily: 'Poppins, Arial, sans-serif' }}>
@@ -257,8 +262,16 @@ function Clients() {
           <button style={styleBouton} onClick={ajouterClient}>Ajouter</button>
         </div>
 
+                <input
+          type="text"
+          placeholder="🔍 Rechercher un client..."
+          value={rechercheClient}
+          onChange={(e) => setRechercheClient(e.target.value)}
+          style={{ ...styleInput, width: '100%', marginBottom: '12px', boxSizing: 'border-box' }}
+        />
+
         <div>
-          {clients.map((client) => (
+          {clientsFiltres.map((client) => (
             <div
               key={client.id}
               onClick={() => selectionnerClient(client)}
