@@ -31,7 +31,7 @@ function App() {
     return localStorage.getItem('boutiqueActiveId') || null
   })
 
-  useEffect(() => {
+    useEffect(() => {
     if (employeConnecte?.role === 'superadmin') {
       supabase.from('boutiques').select('*').then(({ data }) => {
         if (data) {
@@ -44,6 +44,23 @@ function App() {
       })
     }
   }, [employeConnecte])
+    useEffect(() => {
+    async function rafraichirEmploye() {
+      if (!employeConnecte || employeConnecte.role === 'superadmin') return
+
+      const { data, error } = await supabase
+        .from('employes')
+        .select('*')
+        .eq('id', employeConnecte.id)
+        .single()
+
+      if (!error && data) {
+        setEmployeConnecte(data)
+        localStorage.setItem('employeConnecte', JSON.stringify(data))
+      }
+    }
+    rafraichirEmploye()
+  }, [])
 
   function changerBoutiqueActive(id) {
     setBoutiqueActiveId(id)
