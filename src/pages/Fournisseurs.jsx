@@ -18,6 +18,10 @@ function Fournisseurs() {
   const [produits, setProduits] = useState([])
   const [produitAchatId, setProduitAchatId] = useState('')
   const [quantiteAchat, setQuantiteAchat] = useState('')
+    const [rechercheProduit, setRechercheProduit] = useState('')
+
+  const [panierAchats, setPanierAchats] = useState([])
+  const [envoiFacture, setEnvoiFacture] = useState(false)
 
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
   const boutiqueId = getBoutiqueId()
@@ -74,10 +78,12 @@ function Fournisseurs() {
 
   function selectionnerFournisseur(fournisseur) {
     setFournisseurSelectionne(fournisseur)
+    setPanierAchats([])
     chargerAchats(fournisseur.id)
   }
 
-  async function ajouterAchat() {
+  // --- Ajouter une ligne au panier de la facture (pas encore enregistrée) ---
+  function ajouterLigneAuPanier() {
     if (!montantAchat || Number(montantAchat) <= 0) {
       alert('Entrez un montant valide')
       return
@@ -87,38 +93,72 @@ function Fournisseurs() {
       return
     }
 
-    const { error } = await supabase.from('achats').insert([
+    const produit = produits.find((p) => String(p.id) === String(produitAchatId))
+
+    setPanierAchats([
+      ...panierAchats,
       {
-        fournisseur_id: fournisseurSelectionne.id,
-        description: descriptionAchat,
-        montant_total: Number(montantAchat),
-        montant_paye: 0,
-        statut: 'en cours',
-        boutique_id: boutiqueId,
         produit_id: produitAchatId,
+        nom_produit: produit?.nom || '',
+        description: descriptionAchat,
+        montant: Number(montantAchat),
         quantite: Number(quantiteAchat),
       },
     ])
-
-    if (error) {
-      alert('Erreur : ' + error.message)
-      return
-    }
-
-    await supabase.from('stock_mouvements').insert({
-      boutique_id: boutiqueId,
-      produit_id: produitAchatId,
-      employe_id: employe?.id,
-      type_mouvement: 'Entrée',
-      quantite: Number(quantiteAchat),
-      motif: `Achat fournisseur : ${fournisseurSelectionne.nom}`,
-    })
 
     setDescriptionAchat('')
     setMontantAchat('')
     setProduitAchatId('')
     setQuantiteAchat('')
+  }
+
+  function retirerLigneDuPanier(index) {
+    setPanierAchats(panierAchats.filter((_, i) => i !== index))
+  }
+
+  // --- Enregistrer toute la facture (toutes les lignes du panier d'un coup) ---
+  async function enregistrerFacture() {
+    if (panierAchats.length === 0) {
+      alert('Ajoutez au moins un produit à la facture')
+      return
+    }
+
+    setEnvoiFacture(true)
+
+    for (const ligne of panierAchats) {
+      const { error } = await supabase.from('achats').insert([
+        {
+          fournisseur_id: fournisseurSelectionne.id,
+          description: ligne.description,
+          montant_total: ligne.montant,
+          montant_paye: 0,
+          statut: 'en cours',
+          boutique_id: boutiqueId,
+          produit_id: ligne.produit_id,
+          quantite: ligne.quantite,
+        },
+      ])
+
+      if (error) {
+        setEnvoiFacture(false)
+        alert('Erreur sur ' + ligne.nom_produit + ' : ' + error.message)
+        return
+      }
+
+      await supabase.from('stock_mouvements').insert({
+        boutique_id: boutiqueId,
+        produit_id: ligne.produit_id,
+        employe_id: employe?.id,
+        type_mouvement: 'Entrée',
+        quantite: ligne.quantite,
+        motif: `Achat fournisseur : ${fournisseurSelectionne.nom}`,
+      })
+    }
+
+    setEnvoiFacture(false)
+    setPanierAchats([])
     chargerAchats(fournisseurSelectionne.id)
+    alert(`Facture enregistrée : ${panierAchats.length} produit(s) ajouté(s).`)
   }
 
   async function enregistrerPaiement(achat) {
@@ -173,6 +213,8 @@ function Fournisseurs() {
     boxShadow: '0 2px 8px rgba(43, 38, 32, 0.06)',
   }
 
+  const montantTotalPanier = panierAchats.reduce((s, l) => s + l.montant, 0)
+
   return (
     <div style={{ display: 'flex', padding: '20px', gap: '30px', fontFamily: 'Poppins, Arial, sans-serif' }}>
       <div style={{ flex: 1 }}>
@@ -219,7 +261,8 @@ function Fournisseurs() {
             <h2>📦 Achats chez {fournisseurSelectionne.nom}</h2>
 
             <div style={styleCarteFormulaire}>
-              <h4>Nouvel achat</h4>
+              <h4>Nouvelle facture (plusieurs produits possibles)</h4>
+
               <input
                 style={styleInput}
                 placeholder="Description (ex: 50 blocs notes)"
@@ -233,15 +276,23 @@ function Fournisseurs() {
                 value={montantAchat}
                 onChange={(e) => setMontantAchat(e.target.value)}
               />
+                           <input
+                style={styleInput}
+                placeholder="🔍 Rechercher un produit..."
+                value={rechercheProduit}
+                onChange={(e) => setRechercheProduit(e.target.value)}
+              />
               <select
                 style={styleInput}
                 value={produitAchatId}
                 onChange={(e) => setProduitAchatId(e.target.value)}
               >
                 <option value="">-- Choisir un produit --</option>
-                {produits.map((p) => (
-                  <option key={p.id} value={p.id}>{p.nom}</option>
-                ))}
+                {produits
+                  .filter((p) => p.nom.toLowerCase().includes(rechercheProduit.toLowerCase()))
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>{p.nom}</option>
+                  ))}
               </select>
               <input
                 style={styleInput}
@@ -251,7 +302,49 @@ function Fournisseurs() {
                 onChange={(e) => setQuantiteAchat(e.target.value)}
               />
               <br />
-              <button style={styleBouton} onClick={ajouterAchat}>+ Ajouter l'achat</button>
+              <button style={styleBouton} onClick={ajouterLigneAuPanier}>+ Ajouter à la facture</button>
+
+              {panierAchats.length > 0 && (
+                <div style={{ marginTop: '15px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '10px' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#F7F5F2' }}>
+                        <th style={{ textAlign: 'left', padding: '6px', fontSize: '13px', color: '#6B6357' }}>Produit</th>
+                        <th style={{ textAlign: 'left', padding: '6px', fontSize: '13px', color: '#6B6357' }}>Qté</th>
+                        <th style={{ textAlign: 'left', padding: '6px', fontSize: '13px', color: '#6B6357' }}>Montant</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {panierAchats.map((ligne, index) => (
+                        <tr key={index} style={{ borderTop: '1px solid #E6E0D6' }}>
+                          <td style={{ padding: '6px' }}>{ligne.nom_produit}</td>
+                          <td style={{ padding: '6px' }}>{ligne.quantite}</td>
+                          <td style={{ padding: '6px' }}>{ligne.montant.toLocaleString('fr-FR')} FCFA</td>
+                          <td style={{ padding: '6px' }}>
+                            <button
+                              onClick={() => retirerLigneDuPanier(index)}
+                              style={{ color: 'red', border: 'none', background: 'none', cursor: 'pointer', fontSize: '13px' }}
+                            >
+                              Retirer
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p style={{ fontWeight: 600, marginBottom: '10px' }}>
+                    Total de la facture : {montantTotalPanier.toLocaleString('fr-FR')} FCFA ({panierAchats.length} produit{panierAchats.length > 1 ? 's' : ''})
+                  </p>
+                  <button
+                    onClick={enregistrerFacture}
+                    disabled={envoiFacture}
+                    style={{ ...styleBouton, backgroundColor: '#2E7D32' }}
+                  >
+                    {envoiFacture ? 'Enregistrement...' : '✅ Enregistrer la facture complète'}
+                  </button>
+                </div>
+              )}
             </div>
 
             {achats.length === 0 && <p style={{ color: '#6B6357' }}>Aucun achat pour ce fournisseur.</p>}

@@ -32,6 +32,13 @@ function GestionEmployes() {
   const [nouvelleExceptionDate, setNouvelleExceptionDate] = useState('')
   const [nouvelleExceptionTravaille, setNouvelleExceptionTravaille] = useState('non')
 
+  const [salaireOuvertId, setSalaireOuvertId] = useState(null)
+  const [salaires, setSalaires] = useState([])
+  const [nouveauSalaireMontant, setNouveauSalaireMontant] = useState('')
+  const [nouveauSalaireDate, setNouveauSalaireDate] = useState('')
+  const [nouveauSalairePeriode, setNouveauSalairePeriode] = useState('')
+  const [envoiSalaire, setEnvoiSalaire] = useState(false)
+
   const employeConnecte = JSON.parse(localStorage.getItem('employeConnecte'))
   const estSuperadmin = employeConnecte?.role === 'superadmin'
 
@@ -145,7 +152,7 @@ function GestionEmployes() {
   }
 
   // ============================================================
-  // PLANNING (jours fixes + exceptions ponctuelles)
+  // PLANNING
   // ============================================================
 
   async function ouvrirPlanning(employe) {
@@ -153,6 +160,7 @@ function GestionEmployes() {
       setPlanningOuvertId(null)
       return
     }
+    setSalaireOuvertId(null)
     setPlanningOuvertId(employe.id)
     await chargerExceptions(employe.id)
   }
@@ -229,6 +237,78 @@ function GestionEmployes() {
     chargerExceptions(employeId)
   }
 
+  // ============================================================
+  // SALAIRES
+  // ============================================================
+
+  async function ouvrirSalaire(employe) {
+    if (salaireOuvertId === employe.id) {
+      setSalaireOuvertId(null)
+      return
+    }
+    setPlanningOuvertId(null)
+    setSalaireOuvertId(employe.id)
+    await chargerSalaires(employe.id)
+  }
+
+  async function chargerSalaires(employeId) {
+    const { data } = await supabase
+      .from('salaires')
+      .select('*')
+      .eq('employe_id', employeId)
+      .order('date_paiement', { ascending: false })
+    setSalaires(data || [])
+  }
+
+  async function enregistrerSalaire(employe) {
+    const montant = parseInt(nouveauSalaireMontant, 10)
+    if (!montant || montant <= 0) {
+      alert('Entrez un montant valide')
+      return
+    }
+    if (!nouveauSalaireDate) {
+      alert('Choisissez une date de paiement')
+      return
+    }
+
+    setEnvoiSalaire(true)
+
+    const { error: erreurSalaire } = await supabase.from('salaires').insert({
+      employe_id: employe.id,
+      montant,
+      date_paiement: nouveauSalaireDate,
+      periode: nouveauSalairePeriode || null,
+      boutique_id: boutiqueId,
+    })
+
+    if (erreurSalaire) {
+      setEnvoiSalaire(false)
+      alert('Erreur : ' + erreurSalaire.message)
+      return
+    }
+
+    // Enregistre aussi comme dépense pour impacter le calcul du bénéfice
+    await supabase.from('depenses').insert({
+      categorie: 'Salaire',
+      description: `Salaire ${employe.nom}${nouveauSalairePeriode ? ' - ' + nouveauSalairePeriode : ''}`,
+      montant,
+      boutique_id: boutiqueId,
+    })
+
+    setEnvoiSalaire(false)
+    setNouveauSalaireMontant('')
+    setNouveauSalaireDate('')
+    setNouveauSalairePeriode('')
+    chargerSalaires(employe.id)
+    alert('Paiement de salaire enregistré.')
+  }
+
+  async function supprimerSalaire(id, employeId) {
+    if (!confirm("Supprimer ce paiement de salaire ? (Il restera cependant dans l'historique des Dépenses, à supprimer séparément si besoin)")) return
+    await supabase.from('salaires').delete().eq('id', id)
+    chargerSalaires(employeId)
+  }
+
   if (chargement) return <p style={{ padding: '20px' }}>Chargement...</p>
 
   return (
@@ -300,6 +380,7 @@ function GestionEmployes() {
                   <th key={p.cle} style={{ padding: '10px', textAlign: 'center' }}>{p.label}</th>
                 ))}
                 <th style={{ padding: '10px', textAlign: 'center' }}>Planning</th>
+                <th style={{ padding: '10px', textAlign: 'center' }}>Salaire</th>
                 <th style={{ padding: '10px' }}></th>
               </tr>
             </thead>
@@ -321,13 +402,15 @@ function GestionEmployes() {
                     ))}
                     <td style={{ padding: '10px', textAlign: 'center' }}>
                       {employe.role !== 'proprietaire' && (
-                        <button
-                          onClick={() => ouvrirPlanning(employe)}
-                          style={{ padding: '5px 10px', cursor: 'pointer' }}
-                        >
+                        <button onClick={() => ouvrirPlanning(employe)} style={{ padding: '5px 10px', cursor: 'pointer' }}>
                           {planningOuvertId === employe.id ? 'Fermer' : 'Gérer'}
                         </button>
                       )}
+                    </td>
+                    <td style={{ padding: '10px', textAlign: 'center' }}>
+                      <button onClick={() => ouvrirSalaire(employe)} style={{ padding: '5px 10px', cursor: 'pointer' }}>
+                        {salaireOuvertId === employe.id ? 'Fermer' : 'Gérer'}
+                      </button>
                     </td>
                     <td style={{ padding: '10px' }}>
                       {employe.role !== 'proprietaire' && (
@@ -340,7 +423,7 @@ function GestionEmployes() {
 
                   {planningOuvertId === employe.id && (
                     <tr>
-                      <td colSpan={PERMISSIONS.length + 4} style={{ padding: '15px', backgroundColor: '#faf8f5', border: '1px solid #E6E0D6' }}>
+                      <td colSpan={PERMISSIONS.length + 5} style={{ padding: '15px', backgroundColor: '#faf8f5', border: '1px solid #E6E0D6' }}>
                         <strong>Planning fixe de {employe.nom}</strong>
                         <p style={{ fontSize: '13px', color: '#6B6357', margin: '4px 0 10px' }}>
                           Cochez les jours où {employe.nom} travaille. Si aucun jour n'est coché, il n'y a aucune restriction (il peut se connecter tous les jours).
@@ -399,6 +482,78 @@ function GestionEmployes() {
                                 {new Date(exc.date).toLocaleDateString('fr-FR')} — {exc.travaille ? 'Travaille exceptionnellement' : 'Absent exceptionnellement'}{' '}
                                 <button
                                   onClick={() => supprimerException(exc.id, employe.id)}
+                                  style={{ color: 'red', border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}
+                                >
+                                  (supprimer)
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+
+                  {salaireOuvertId === employe.id && (
+                    <tr>
+                      <td colSpan={PERMISSIONS.length + 5} style={{ padding: '15px', backgroundColor: '#faf8f5', border: '1px solid #E6E0D6' }}>
+                        <strong>💰 Salaire de {employe.nom}</strong>
+                        <p style={{ fontSize: '13px', color: '#6B6357', margin: '4px 0 15px' }}>
+                          Enregistrez un paiement de salaire. Il sera automatiquement compté dans vos Dépenses.
+                        </p>
+
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: '15px' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '12px', color: '#6B6357', marginBottom: '4px' }}>Montant (FCFA)</label>
+                            <input
+                              type="number"
+                              value={nouveauSalaireMontant}
+                              onChange={(e) => setNouveauSalaireMontant(e.target.value)}
+                              placeholder="Ex : 40000"
+                              style={{ padding: '7px', width: '130px' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '12px', color: '#6B6357', marginBottom: '4px' }}>Date de paiement</label>
+                            <input
+                              type="date"
+                              value={nouveauSalaireDate}
+                              onChange={(e) => setNouveauSalaireDate(e.target.value)}
+                              style={{ padding: '7px' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '12px', color: '#6B6357', marginBottom: '4px' }}>Période (optionnel)</label>
+                            <input
+                              type="text"
+                              value={nouveauSalairePeriode}
+                              onChange={(e) => setNouveauSalairePeriode(e.target.value)}
+                              placeholder="Ex : Août 2026"
+                              style={{ padding: '7px', width: '150px' }}
+                            />
+                          </div>
+                          <button
+                            onClick={() => enregistrerSalaire(employe)}
+                            disabled={envoiSalaire}
+                            style={{ padding: '8px 16px', backgroundColor: '#C9822A', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                          >
+                            {envoiSalaire ? 'Enregistrement...' : 'Enregistrer le paiement'}
+                          </button>
+                        </div>
+
+                        <hr style={{ border: 'none', borderTop: '1px solid #E6E0D6', margin: '10px 0' }} />
+
+                        <strong>Historique des paiements</strong>
+                        {salaires.length === 0 ? (
+                          <p style={{ fontSize: '13px', color: '#6B6357', marginTop: '8px' }}>Aucun paiement enregistré.</p>
+                        ) : (
+                          <ul style={{ paddingLeft: '20px', margin: '8px 0 0' }}>
+                            {salaires.map((s) => (
+                              <li key={s.id} style={{ fontSize: '13px', marginBottom: '4px' }}>
+                                {new Date(s.date_paiement).toLocaleDateString('fr-FR')} — {Number(s.montant).toLocaleString('fr-FR')} FCFA
+                                {s.periode ? ` (${s.periode})` : ''}{' '}
+                                <button
+                                  onClick={() => supprimerSalaire(s.id, employe.id)}
                                   style={{ color: 'red', border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}
                                 >
                                   (supprimer)

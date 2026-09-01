@@ -217,6 +217,7 @@ function Caisse() {
   const totalBrut = panier.reduce((somme, item) => somme + item.prix_vente * item.quantiteVente, 0)
   const totalFinal = totalBrut - remise
   const monnaieRendue = montantRecu !== '' ? parseFloat(montantRecu) - totalFinal : null
+    const creditRestant = montantRecu !== '' ? Math.max(totalFinal - parseFloat(montantRecu), 0) : totalFinal
 
   const produitsFiltres = produits.filter((p) =>
     p.nom.toLowerCase().includes(recherche.toLowerCase())
@@ -303,8 +304,10 @@ function Caisse() {
       })
     }
 
-    if (modePaiement === 'Crédit client' && idClientCredit) {
-      const { error: erreurCredit } = await supabase.from('credits').insert({ client_id: idClientCredit, sale_id: vente.id, montant_total: totalFinal, montant_paye: 0, statut: 'en cours', boutique_id: boutiqueId, })
+       if (modePaiement === 'Crédit client' && idClientCredit) {
+      const versementInitial = montantRecu !== '' ? parseFloat(montantRecu) : 0
+      const statutCredit = versementInitial >= totalFinal ? 'solde' : 'en cours'
+      const { error: erreurCredit } = await supabase.from('credits').insert({ client_id: idClientCredit, sale_id: vente.id, montant_total: totalFinal, montant_paye: versementInitial, statut: statutCredit, boutique_id: boutiqueId, })
       if (erreurCredit) {
         alert('La vente est enregistrée, mais le crédit n\'a pas pu être créé : ' + erreurCredit.message)
       }
@@ -366,9 +369,14 @@ function Caisse() {
     if (recu.remise > 0) texte += `Remise : -${recu.remise} FCFA\n`
     texte += `TOTAL : ${recu.total} FCFA\n`
     texte += `Paiement : ${recu.modePaiement}\n`
-    if (recu.montantRecu !== null && recu.montantRecu !== undefined) {
-      texte += `Montant reçu : ${recu.montantRecu} FCFA\n`
-      texte += `Monnaie rendue : ${recu.monnaieRendue} FCFA\n`
+       if (recu.montantRecu !== null && recu.montantRecu !== undefined) {
+      if (recu.modePaiement === 'Crédit client') {
+        texte += `Versé maintenant : ${recu.montantRecu} FCFA\n`
+        texte += `Crédit restant : ${Math.max(recu.total - recu.montantRecu, 0)} FCFA\n`
+      } else {
+        texte += `Montant reçu : ${recu.montantRecu} FCFA\n`
+        texte += `Monnaie rendue : ${recu.monnaieRendue} FCFA\n`
+      }
     }
     texte += `\n`
     texte += `Merci pour votre achat !`
@@ -640,8 +648,8 @@ function Caisse() {
             </select>
           </div>
 
-          <div style={{ marginTop: '10px' }}>
-            <label>Montant reçu du client (FCFA) : </label>
+                   <div style={{ marginTop: '10px' }}>
+            <label>{modePaiement === 'Crédit client' ? 'Montant versé maintenant (optionnel) : ' : 'Montant reçu du client (FCFA) : '}</label>
             <input
               type="number"
               value={montantRecu}
@@ -650,14 +658,21 @@ function Caisse() {
             />
           </div>
 
-          {montantRecu !== '' && (
+          {montantRecu !== '' && modePaiement === 'Crédit client' && (
+            <p style={{ marginTop: '8px', fontWeight: 600, color: creditRestant > 0 ? '#C9822A' : '#2E7D32' }}>
+              {creditRestant > 0
+                ? `Crédit restant : ${creditRestant} FCFA`
+                : `✅ Payé en totalité, aucun crédit restant`}
+            </p>
+          )}
+
+          {montantRecu !== '' && modePaiement !== 'Crédit client' && (
             <p style={{ marginTop: '8px', fontWeight: 600, color: monnaieRendue < 0 ? '#C62828' : '#2E7D32' }}>
               {monnaieRendue < 0
                 ? `Il manque ${Math.abs(monnaieRendue)} FCFA`
                 : `Monnaie à rendre : ${monnaieRendue} FCFA`}
             </p>
           )}
-
           {modePaiement === 'Crédit client' && (
             <div style={{ marginTop: '10px' }}>
               <label>Client : </label>
