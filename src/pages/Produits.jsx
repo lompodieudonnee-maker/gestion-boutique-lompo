@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { getBoutiqueId } from '../lib/boutique'
 import { QRCodeSVG } from "qrcode.react";
+import ScannerProduit from "../ScannerProduit";
+
 function Produits() {
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
   const boutiqueId = getBoutiqueId()
@@ -17,6 +19,7 @@ function Produits() {
   const [quantite, setQuantite] = useState('')
   const [seuilAlerte, setSeuilAlerte] = useState('')
   const [codeProduit, setCodeProduit] = useState('')
+  const [scannerOuvert, setScannerOuvert] = useState(false)
 
   const [modeEdition, setModeEdition] = useState(false)
   const [idEnEdition, setIdEnEdition] = useState(null)
@@ -67,6 +70,11 @@ function Produits() {
 
   function genererCodeAuto() {
     return "STK-" + Date.now().toString().slice(-8)
+  }
+
+  function gererCodeScanne(code) {
+    setCodeProduit(code)
+    setScannerOuvert(false)
   }
 
   async function ajouterProduit(e) {
@@ -202,10 +210,6 @@ function Produits() {
   return (
     <div style={{ padding: '20px', fontFamily: 'Poppins, Arial, sans-serif' }}>
       <h1>📦 Gestion des Produits</h1>
-              <div style={styleChamp}>
-          <label>Seuil d'alerte : </label><br />
-          <input style={styleInput} type="number" value={seuilAlerte} onChange={(e) => setSeuilAlerte(e.target.value)} />
-        </div>
 
       <form
         onSubmit={modeEdition ? enregistrerModification : ajouterProduit}
@@ -251,11 +255,34 @@ function Produits() {
           <input style={styleInput} type="number" value={seuilAlerte} onChange={(e) => setSeuilAlerte(e.target.value)} />
         </div>
 
-        <button type="submit" style={styleBoutonPrimaire}>{modeEdition ? 'Enregistrer' : 'Ajouter'}</button>
-                <div style={styleChamp}>
+        <div style={styleChamp}>
           <label>Code produit (scannez ou laissez vide) : </label><br />
-          <input style={styleInput} value={codeProduit} onChange={(e) => setCodeProduit(e.target.value)} placeholder="Laissez vide pour générer un QR" />
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              style={{ ...styleInput, width: '190px' }}
+              value={codeProduit}
+              onChange={(e) => setCodeProduit(e.target.value)}
+              placeholder="Laissez vide pour générer un QR"
+            />
+            <button
+              type="button"
+              onClick={() => setScannerOuvert(true)}
+              style={{
+                padding: '9px 14px',
+                background: '#B8860B',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 8,
+                fontWeight: 'bold',
+                cursor: 'pointer',
+              }}
+            >
+              📷
+            </button>
+          </div>
         </div>
+
+        <button type="submit" style={styleBoutonPrimaire}>{modeEdition ? 'Enregistrer' : 'Ajouter'}</button>
 
         {modeEdition && (
           <button type="button" onClick={reinitialiserFormulaire} style={styleBoutonSecondaire}>
@@ -297,8 +324,7 @@ function Produits() {
               <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Bénéfice unit.</th>
               <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Bénéfice total</th>
               <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Alerte</th>
-              <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Actions</th>
-                            <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Code</th>
+              <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Code</th>
               <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Actions</th>
             </tr>
           </thead>
@@ -332,6 +358,13 @@ function Produits() {
             })}
           </tbody>
         </table>
+      )}
+
+      {scannerOuvert && (
+        <ScannerProduit
+          onScan={gererCodeScanne}
+          onClose={() => setScannerOuvert(false)}
+        />
       )}
     </div>
   )
