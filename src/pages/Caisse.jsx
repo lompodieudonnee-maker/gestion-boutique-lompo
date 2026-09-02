@@ -10,6 +10,7 @@ function Caisse() {
   const [scannerOuvert, setScannerOuvert] = useState(false);
 
   const [produits, setProduits] = useState([])
+  const [mouvements, setMouvements] = useState([])
   const [panier, setPanier] = useState([])
   const [remise, setRemise] = useState(0)
   const [modePaiement, setModePaiement] = useState('Espèces')
@@ -37,6 +38,18 @@ function Caisse() {
       .select('*')
       .eq('boutique_id', boutiqueId)
     if (!error) setProduits(data)
+
+    const { data: mouvementsData } = await supabase
+      .from('stock_mouvements')
+      .select('produit_id, quantite')
+      .eq('boutique_id', boutiqueId)
+    setMouvements(mouvementsData || [])
+  }
+
+  function quantiteActuelle(idProduit) {
+    return mouvements
+      .filter((m) => String(m.produit_id) === String(idProduit))
+      .reduce((total, m) => total + Number(m.quantite), 0)
   }
 
   async function chargerNomBoutique() {
@@ -182,9 +195,10 @@ function Caisse() {
   }, [])
 
   function ajouterAuPanier(produit) {
+    const stockDisponible = quantiteActuelle(produit.id)
     const existe = panier.find((item) => item.id === produit.id)
     if (existe) {
-      if (existe.quantiteVente >= produit.quantite) {
+      if (existe.quantiteVente >= stockDisponible) {
         alert('Stock insuffisant pour ce produit.')
         return
       }
@@ -194,7 +208,7 @@ function Caisse() {
         )
       )
     } else {
-      if (produit.quantite < 1) {
+      if (stockDisponible < 1) {
         alert('Ce produit est en rupture de stock.')
         return
       }
@@ -216,8 +230,8 @@ function Caisse() {
 
   function changerQuantite(id, nouvelleQuantite) {
     if (nouvelleQuantite < 1) return
-    const produit = produits.find((p) => p.id === id)
-    if (nouvelleQuantite > produit.quantite) {
+    const stockDisponible = quantiteActuelle(id)
+    if (nouvelleQuantite > stockDisponible) {
       alert('Stock insuffisant.')
       return
     }
@@ -305,9 +319,6 @@ function Caisse() {
     }
 
     for (const item of panier) {
-      const nouvelleQuantite = item.quantite - item.quantiteVente
-      await supabase.from('products').update({ quantite: nouvelleQuantite }).eq('id', item.id)
-
       await supabase.from('stock_mouvements').insert({
         boutique_id: boutiqueId,
         produit_id: item.id,
@@ -600,25 +611,28 @@ function Caisse() {
             </button>
           </div>
           <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-            {produitsFiltres.map((p) => (
-              <div
-                key={p.id}
-                onClick={() => ajouterAuPanier(p)}
-                style={{
-                  padding: '12px',
-                  border: '1px solid #E6E0D6',
-                  borderRadius: '8px',
-                  marginBottom: '8px',
-                  cursor: 'pointer',
-                  backgroundColor: p.quantite < 1 ? '#FBEAEA' : 'white',
-                  transition: 'border-color 0.15s ease',
-                }}
-              >
-                <strong>{p.nom}</strong> - {p.prix_vente} FCFA
-                <br />
-                <small style={{ color: '#6B6357' }}>Stock : {p.quantite}</small>
-              </div>
-            ))}
+            {produitsFiltres.map((p) => {
+              const qteDisponible = quantiteActuelle(p.id)
+              return (
+                <div
+                  key={p.id}
+                  onClick={() => ajouterAuPanier(p)}
+                  style={{
+                    padding: '12px',
+                    border: '1px solid #E6E0D6',
+                    borderRadius: '8px',
+                    marginBottom: '8px',
+                    cursor: 'pointer',
+                    backgroundColor: qteDisponible < 1 ? '#FBEAEA' : 'white',
+                    transition: 'border-color 0.15s ease',
+                  }}
+                >
+                  <strong>{p.nom}</strong> - {p.prix_vente} FCFA
+                  <br />
+                  <small style={{ color: '#6B6357' }}>Stock : {qteDisponible}</small>
+                </div>
+              )
+            })}
           </div>
         </div>
 
