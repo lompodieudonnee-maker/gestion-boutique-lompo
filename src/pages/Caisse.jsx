@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
+import ScannerProduit from "../ScannerProduit";
 import { supabase } from '../lib/supabaseClient'
 import { getBoutiqueId } from '../lib/boutique'
-import { genererRapportVentesPDF } from "../lib/exportRapportPDF"
-
+import { genererRapportVentesPDF } from '../lib/rapportPDF'
 function Caisse() {
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
   const boutiqueId = getBoutiqueId()
+  const [scannerOuvert, setScannerOuvert] = useState(false);
 
   const [produits, setProduits] = useState([])
   const [panier, setPanier] = useState([])
@@ -197,6 +198,18 @@ function Caisse() {
         return
       }
       setPanier([...panier, { ...produit, quantiteVente: 1 }])
+    }
+  }
+
+  function gererCodeScanne(code) {
+    setScannerOuvert(false)
+
+    const produitTrouve = produits.find((p) => p.code_produit === code)
+
+    if (produitTrouve) {
+      ajouterAuPanier(produitTrouve)
+    } else {
+      alert("Aucun produit trouvé avec ce code. Vérifiez que le produit a bien été enregistré avec ce code.")
     }
   }
 
@@ -563,12 +576,28 @@ function Caisse() {
       <div className="caisse-layout" style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
         <div style={{ flex: '1', minWidth: '300px' }}>
           <h2>Produits disponibles</h2>
-          <input
-            placeholder="Rechercher un produit..."
-            value={recherche}
-            onChange={(e) => setRecherche(e.target.value)}
-            style={{ width: '100%', padding: '10px 12px', marginBottom: '10px', border: '1px solid #E6E0D6', borderRadius: '8px', fontFamily: 'Poppins, Arial, sans-serif', fontSize: '14px' }}
-          />
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+            <input
+              placeholder="Rechercher un produit..."
+              value={recherche}
+              onChange={(e) => setRecherche(e.target.value)}
+              style={{ flex: 1, padding: '10px 12px', border: '1px solid #E6E0D6', borderRadius: '8px', fontFamily: 'Poppins, Arial, sans-serif', fontSize: '14px' }}
+            />
+            <button
+              onClick={() => setScannerOuvert(true)}
+              style={{
+                padding: '10px 16px',
+                background: '#B8860B',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 8,
+                fontWeight: 'bold',
+                cursor: 'pointer',
+              }}
+            >
+              📷 Scanner
+            </button>
+          </div>
           <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
             {produitsFiltres.map((p) => (
               <div
@@ -724,6 +753,12 @@ function Caisse() {
           </button>
         </div>
       </div>
+      {scannerOuvert && (
+  <ScannerProduit
+    onScan={gererCodeScanne}
+    onClose={() => setScannerOuvert(false)}
+  />
+)}
     </div>
   )
 }

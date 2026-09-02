@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { getBoutiqueId } from '../lib/boutique'
+import { QRCodeSVG } from "qrcode.react";
 function Produits() {
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
   const boutiqueId = getBoutiqueId()
@@ -15,6 +16,7 @@ function Produits() {
   const [prixVente, setPrixVente] = useState('')
   const [quantite, setQuantite] = useState('')
   const [seuilAlerte, setSeuilAlerte] = useState('')
+  const [codeProduit, setCodeProduit] = useState('')
 
   const [modeEdition, setModeEdition] = useState(false)
   const [idEnEdition, setIdEnEdition] = useState(null)
@@ -51,19 +53,26 @@ function Produits() {
       .reduce((total, m) => total + Number(m.quantite), 0)
   }
 
-  function reinitialiserFormulaire() {
+    function reinitialiserFormulaire() {
     setNom('')
     setCategorie('')
     setPrixAchat('')
     setPrixVente('')
     setQuantite('')
     setSeuilAlerte('')
+    setCodeProduit('')
     setModeEdition(false)
     setIdEnEdition(null)
   }
 
+  function genererCodeAuto() {
+    return "STK-" + Date.now().toString().slice(-8)
+  }
+
   async function ajouterProduit(e) {
     e.preventDefault()
+
+        const codeFinal = codeProduit.trim() || genererCodeAuto()
 
     const { data: nouveauProduit, error } = await supabase.from('products').insert({
       nom: nom,
@@ -73,8 +82,8 @@ function Produits() {
       quantite: 0,
       seuil_alerte: parseInt(seuilAlerte),
       boutique_id: boutiqueId,
+      code_produit: codeFinal,
     }).select().single()
-
     if (error) {
       alert('Erreur lors de l\'ajout : ' + error.message)
       return
@@ -96,7 +105,7 @@ function Produits() {
     chargerProduits()
   }
 
-  function commencerModification(produit) {
+    function commencerModification(produit) {
     setModeEdition(true)
     setIdEnEdition(produit.id)
     setNom(produit.nom)
@@ -105,10 +114,13 @@ function Produits() {
     setPrixVente(produit.prix_vente)
     setQuantite('')
     setSeuilAlerte(produit.seuil_alerte || '')
+    setCodeProduit(produit.code_produit || '')
   }
 
   async function enregistrerModification(e) {
     e.preventDefault()
+
+        const codeFinal = codeProduit.trim() || genererCodeAuto()
 
     const { error } = await supabase
       .from('products')
@@ -118,6 +130,7 @@ function Produits() {
         prix_achat: parseFloat(prixAchat),
         prix_vente: parseFloat(prixVente),
         seuil_alerte: parseInt(seuilAlerte),
+        code_produit: codeFinal,
       })
       .eq('id', idEnEdition)
 
@@ -133,8 +146,7 @@ function Produits() {
     const confirmation = window.confirm('Voulez-vous vraiment supprimer ' + nomProduit + ' ?')
     if (!confirmation) return
 
-    const { error } = await supabase.from('products').delete().eq('id', id)
-
+        const { error } = await supabase.from('products').delete().eq('id', id)
     if (error) {
       alert('Erreur lors de la suppression : ' + error.message)
     } else {
@@ -190,6 +202,10 @@ function Produits() {
   return (
     <div style={{ padding: '20px', fontFamily: 'Poppins, Arial, sans-serif' }}>
       <h1>📦 Gestion des Produits</h1>
+              <div style={styleChamp}>
+          <label>Seuil d'alerte : </label><br />
+          <input style={styleInput} type="number" value={seuilAlerte} onChange={(e) => setSeuilAlerte(e.target.value)} />
+        </div>
 
       <form
         onSubmit={modeEdition ? enregistrerModification : ajouterProduit}
@@ -236,6 +252,10 @@ function Produits() {
         </div>
 
         <button type="submit" style={styleBoutonPrimaire}>{modeEdition ? 'Enregistrer' : 'Ajouter'}</button>
+                <div style={styleChamp}>
+          <label>Code produit (scannez ou laissez vide) : </label><br />
+          <input style={styleInput} value={codeProduit} onChange={(e) => setCodeProduit(e.target.value)} placeholder="Laissez vide pour générer un QR" />
+        </div>
 
         {modeEdition && (
           <button type="button" onClick={reinitialiserFormulaire} style={styleBoutonSecondaire}>
@@ -278,6 +298,8 @@ function Produits() {
               <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Bénéfice total</th>
               <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Alerte</th>
               <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Actions</th>
+                            <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Code</th>
+              <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -292,7 +314,15 @@ function Produits() {
                   <td>{qte}</td>
                   <td>{(p.prix_vente - p.prix_achat).toLocaleString()} FCFA</td>
                   <td>{((p.prix_vente - p.prix_achat) * qte).toLocaleString()} FCFA</td>
-                  <td>{qte <= p.seuil_alerte ? '⚠️' : ''}</td>
+                                    <td>{qte <= p.seuil_alerte ? '⚠️' : ''}</td>
+                  <td>
+                    {p.code_produit && (
+                      <div style={{ textAlign: 'center' }}>
+                        <QRCodeSVG value={p.code_produit} size={60} />
+                        <p style={{ fontSize: 10 }}>{p.code_produit}</p>
+                      </div>
+                    )}
+                  </td>
                   <td>
                     <button style={styleBoutonAction} onClick={() => commencerModification(p)}>Modifier</button>
                     <button style={{ ...styleBoutonAction, color: '#B71C1C' }} onClick={() => supprimerProduit(p.id, p.nom)}>Supprimer</button>
