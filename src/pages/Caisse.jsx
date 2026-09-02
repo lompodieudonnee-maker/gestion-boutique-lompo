@@ -33,10 +33,12 @@ function Caisse() {
   const [genererEnCours, setGenererEnCours] = useState(false)
 
   async function chargerProduits() {
+    
     const { data, error } = await supabase
       .from('products')
       .select('*')
       .eq('boutique_id', boutiqueId)
+      .eq('actif', true)
     if (!error) setProduits(data)
 
     const { data: mouvementsData } = await supabase
