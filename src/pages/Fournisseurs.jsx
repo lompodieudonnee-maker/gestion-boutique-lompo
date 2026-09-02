@@ -13,12 +13,12 @@ function Fournisseurs() {
 
   const [descriptionAchat, setDescriptionAchat] = useState('')
   const [montantAchat, setMontantAchat] = useState('')
-  const [montantPaiement, setMontantPaiement] = useState('')
+  const [montantPaiement, setMontantPaiement] = useState({})
 
   const [produits, setProduits] = useState([])
   const [produitAchatId, setProduitAchatId] = useState('')
   const [quantiteAchat, setQuantiteAchat] = useState('')
-    const [rechercheProduit, setRechercheProduit] = useState('')
+  const [rechercheProduit, setRechercheProduit] = useState('')
 
   const [panierAchats, setPanierAchats] = useState([])
   const [envoiFacture, setEnvoiFacture] = useState(false)
@@ -82,7 +82,6 @@ function Fournisseurs() {
     chargerAchats(fournisseur.id)
   }
 
-  // --- Ajouter une ligne au panier de la facture (pas encore enregistrée) ---
   function ajouterLigneAuPanier() {
     if (!montantAchat || Number(montantAchat) <= 0) {
       alert('Entrez un montant valide')
@@ -116,7 +115,6 @@ function Fournisseurs() {
     setPanierAchats(panierAchats.filter((_, i) => i !== index))
   }
 
-  // --- Enregistrer toute la facture (toutes les lignes du panier d'un coup) ---
   async function enregistrerFacture() {
     if (panierAchats.length === 0) {
       alert('Ajoutez au moins un produit à la facture')
@@ -124,6 +122,8 @@ function Fournisseurs() {
     }
 
     setEnvoiFacture(true)
+
+    const referenceFacture = `FACT-${Date.now()}`
 
     for (const ligne of panierAchats) {
       const { error } = await supabase.from('achats').insert([
@@ -136,6 +136,7 @@ function Fournisseurs() {
           boutique_id: boutiqueId,
           produit_id: ligne.produit_id,
           quantite: ligne.quantite,
+          reference_facture: referenceFacture,
         },
       ])
 
@@ -161,26 +162,69 @@ function Fournisseurs() {
     alert(`Facture enregistrée : ${panierAchats.length} produit(s) ajouté(s).`)
   }
 
-  async function enregistrerPaiement(achat) {
-    if (!montantPaiement || Number(montantPaiement) <= 0) {
+  // --- Regroupement des achats en factures ---
+  function facturesGroupees() {
+    const groupes = {}
+    achats.forEach((achat) => {
+      const cle = achat.reference_facture || `seul-${achat.id}`
+      if (!groupes[cle]) {
+        groupes[cle] = {
+          cle,
+          lignes: [],
+          created_at: achat.created_at,
+        }
+      }
+      groupes[cle].lignes.push(achat)
+      if (new Date(achat.created_at) > new Date(groupes[cle].created_at)) {
+        groupes[cle].created_at = achat.created_at
+      }
+    })
+
+    return Object.values(groupes)
+      .map((g) => {
+        const montantTotal = g.lignes.reduce((s, l) => s + Number(l.montant_total), 0)
+        const montantPaye = g.lignes.reduce((s, l) => s + Number(l.montant_paye), 0)
+        const resteAPayer = montantTotal - montantPaye
+        const statut = resteAPayer <= 0 ? 'solde' : 'en cours'
+        return { ...g, montantTotal, montantPaye, resteAPayer, statut }
+      })
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+  }
+
+  async function enregistrerPaiementFacture(facture) {
+    const montant = Number(montantPaiement[facture.cle])
+    if (!montant || montant <= 0) {
       alert('Entrez un montant valide')
       return
     }
-    const nouveauMontantPaye = Number(achat.montant_paye) + Number(montantPaiement)
-    const nouveauStatut = nouveauMontantPaye >= Number(achat.montant_total) ? 'solde' : 'en cours'
 
-    const { error } = await supabase
-      .from('achats')
-      .update({ montant_paye: nouveauMontantPaye, statut: nouveauStatut })
-      .eq('id', achat.id)
+    let montantRestant = montant
+    const lignesTriees = [...facture.lignes].sort((a, b) => a.id - b.id)
 
-    if (error) {
-      alert('Erreur : ' + error.message)
-      return
+    for (const ligne of lignesTriees) {
+      if (montantRestant <= 0) break
+      const resteLigne = Number(ligne.montant_total) - Number(ligne.montant_paye)
+      if (resteLigne <= 0) continue
+
+      const aAppliquer = Math.min(montantRestant, resteLigne)
+      const nouveauMontantPaye = Number(ligne.montant_paye) + aAppliquer
+      const nouveauStatut = nouveauMontantPaye >= Number(ligne.montant_total) ? 'solde' : 'en cours'
+
+      await supabase
+        .from('achats')
+        .update({ montant_paye: nouveauMontantPaye, statut: nouveauStatut })
+        .eq('id', ligne.id)
+
+      montantRestant -= aAppliquer
     }
-    setMontantPaiement('')
+
+    setMontantPaiement({ ...montantPaiement, [facture.cle]: '' })
     chargerAchats(fournisseurSelectionne.id)
   }
+
+  const produitsFiltres = produits.filter((p) =>
+    p.nom.toLowerCase().includes(rechercheProduit.toLowerCase())
+  )
 
   const styleBouton = {
     padding: '9px 16px',
@@ -276,7 +320,7 @@ function Fournisseurs() {
                 value={montantAchat}
                 onChange={(e) => setMontantAchat(e.target.value)}
               />
-                           <input
+              <input
                 style={styleInput}
                 placeholder="🔍 Rechercher un produit..."
                 value={rechercheProduit}
@@ -288,11 +332,9 @@ function Fournisseurs() {
                 onChange={(e) => setProduitAchatId(e.target.value)}
               >
                 <option value="">-- Choisir un produit --</option>
-                {produits
-                  .filter((p) => p.nom.toLowerCase().includes(rechercheProduit.toLowerCase()))
-                  .map((p) => (
-                    <option key={p.id} value={p.id}>{p.nom}</option>
-                  ))}
+                {produitsFiltres.map((p) => (
+                  <option key={p.id} value={p.id}>{p.nom}</option>
+                ))}
               </select>
               <input
                 style={styleInput}
@@ -347,44 +389,52 @@ function Fournisseurs() {
               )}
             </div>
 
-            {achats.length === 0 && <p style={{ color: '#6B6357' }}>Aucun achat pour ce fournisseur.</p>}
+            {facturesGroupees().length === 0 && <p style={{ color: '#6B6357' }}>Aucun achat pour ce fournisseur.</p>}
 
-            {achats.map((achat) => {
-              const resteAPayer = Number(achat.montant_total) - Number(achat.montant_paye)
-              return (
-                <div
-                  key={achat.id}
-                  style={{
-                    padding: '14px',
-                    marginBottom: '10px',
-                    border: '1px solid #E6E0D6',
-                    borderRadius: '10px',
-                    backgroundColor: achat.statut === 'solde' ? '#EAF5EC' : '#FDECE1',
-                  }}
-                >
-                  {achat.description && <div style={{ fontStyle: 'italic', marginBottom: '4px', color: '#6B6357' }}>{achat.description}</div>}
-                  <div>Montant total : <strong>{achat.montant_total} FCFA</strong></div>
-                  <div>Déjà payé : {achat.montant_paye} FCFA</div>
-                  <div>Reste à payer : <strong>{resteAPayer} FCFA</strong></div>
-                  <div>Statut : {achat.statut === 'solde' ? '✅ Soldé' : '⏳ En cours'}</div>
-
-                  {achat.statut !== 'solde' && (
-                    <div style={{ marginTop: '8px' }}>
-                      <input
-                        style={{ ...styleInput, width: '100px' }}
-                        placeholder="Montant"
-                        type="number"
-                        value={montantPaiement}
-                        onChange={(e) => setMontantPaiement(e.target.value)}
-                      />
-                      <button style={styleBouton} onClick={() => enregistrerPaiement(achat)}>
-                        Enregistrer paiement
-                      </button>
-                    </div>
-                  )}
+            {facturesGroupees().map((facture) => (
+              <div
+                key={facture.cle}
+                style={{
+                  padding: '14px',
+                  marginBottom: '10px',
+                  border: '1px solid #E6E0D6',
+                  borderRadius: '10px',
+                  backgroundColor: facture.statut === 'solde' ? '#EAF5EC' : '#FDECE1',
+                }}
+              >
+                <div style={{ fontSize: '13px', color: '#6B6357', marginBottom: '6px' }}>
+                  {new Date(facture.created_at).toLocaleDateString('fr-FR')} — {facture.lignes.length} produit{facture.lignes.length > 1 ? 's' : ''}
                 </div>
-              )
-            })}
+
+                <ul style={{ margin: '0 0 8px', paddingLeft: '18px', fontSize: '14px' }}>
+                  {facture.lignes.map((l) => (
+                    <li key={l.id}>
+                      {produits.find((p) => String(p.id) === String(l.produit_id))?.nom || l.description || 'Produit'} x{l.quantite} — {Number(l.montant_total).toLocaleString('fr-FR')} FCFA
+                    </li>
+                  ))}
+                </ul>
+
+                <div>Montant total : <strong>{facture.montantTotal.toLocaleString('fr-FR')} FCFA</strong></div>
+                <div>Déjà payé : {facture.montantPaye.toLocaleString('fr-FR')} FCFA</div>
+                <div>Reste à payer : <strong>{facture.resteAPayer.toLocaleString('fr-FR')} FCFA</strong></div>
+                <div>Statut : {facture.statut === 'solde' ? '✅ Soldé' : '⏳ En cours'}</div>
+
+                {facture.statut !== 'solde' && (
+                  <div style={{ marginTop: '8px' }}>
+                    <input
+                      style={{ ...styleInput, width: '100px' }}
+                      placeholder="Montant"
+                      type="number"
+                      value={montantPaiement[facture.cle] || ''}
+                      onChange={(e) => setMontantPaiement({ ...montantPaiement, [facture.cle]: e.target.value })}
+                    />
+                    <button style={styleBouton} onClick={() => enregistrerPaiementFacture(facture)}>
+                      Enregistrer paiement
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
           </>
         )}
       </div>
