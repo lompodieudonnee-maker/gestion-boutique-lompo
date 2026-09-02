@@ -3,6 +3,8 @@ import ScannerProduit from "../ScannerProduit";
 import { supabase } from '../lib/supabaseClient'
 import { getBoutiqueId } from '../lib/boutique'
 import { genererRapportVentesPDF } from "../lib/exportRapportPDF"
+
+function Caisse() {
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
   const boutiqueId = getBoutiqueId()
   const [scannerOuvert, setScannerOuvert] = useState(false);
