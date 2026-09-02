@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react'
 import ScannerProduit from "../ScannerProduit";
 import { supabase } from '../lib/supabaseClient'
 import { getBoutiqueId } from '../lib/boutique'
-import { genererRapportVentesPDF } from '../lib/rapportPDF'
-function Caisse() {
+import { genererRapportVentesPDF } from "../lib/exportRapportPDF"
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
   const boutiqueId = getBoutiqueId()
   const [scannerOuvert, setScannerOuvert] = useState(false);
