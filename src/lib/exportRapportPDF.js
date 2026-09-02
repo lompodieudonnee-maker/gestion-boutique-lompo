@@ -126,10 +126,10 @@ export function genererRapportInventairePDF({
   } else {
     autoTable(doc, {
       startY: y + 3,
-      head: [['Date', 'Produit', 'Type', 'Quantité', 'Motif']],
-      body: mouvementsPeriode.map((m) => [m.date, m.produit, m.type, m.quantite, m.motif]),
+      head: [['Date', 'Produit', 'Type', 'Quantité', 'Motif', 'Employé']],
+      body: mouvementsPeriode.map((m) => [m.date, m.produit, m.type, m.quantite, m.motif, m.employe]),
       headStyles: { fillColor: [55, 71, 79] },
-      styles: { fontSize: 8 },
+      styles: { fontSize: 7.5 },
     })
     y = doc.lastAutoTable.finalY + 12
   }
@@ -148,8 +148,8 @@ export function genererRapportInventairePDF({
   } else {
     autoTable(doc, {
       startY: y + 3,
-      head: [['Date', 'Produit', 'Écart', 'Motif']],
-      body: corrections.map((c) => [c.date, c.produit, c.quantite, c.motif]),
+      head: [['Date', 'Produit', 'Écart', 'Motif', 'Employé']],
+      body: corrections.map((c) => [c.date, c.produit, c.quantite, c.motif, c.employe]),
       headStyles: { fillColor: [183, 28, 28] },
       styles: { fontSize: 8 },
     })

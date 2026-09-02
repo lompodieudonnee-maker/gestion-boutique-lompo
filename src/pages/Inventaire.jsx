@@ -10,6 +10,7 @@ function Inventaire() {
   const [ongletActif, setOngletActif] = useState('valorisation');
   const [produits, setProduits] = useState([]);
   const [mouvements, setMouvements] = useState([]);
+  const [employes, setEmployes] = useState([]);
   const [chargement, setChargement] = useState(true);
   const [comptages, setComptages] = useState({});
   const [envoi, setEnvoi] = useState(false);
@@ -44,12 +45,18 @@ function Inventaire() {
 
     const { data: mouvementsData } = await supabase
       .from('stock_mouvements')
-      .select('id, produit_id, quantite, type_mouvement, motif, created_at')
+      .select('id, produit_id, quantite, type_mouvement, motif, created_at, employe_id')
       .eq('boutique_id', boutiqueId)
       .order('created_at', { ascending: false });
 
+    const { data: employesData } = await supabase
+      .from('employes')
+      .select('id, nom')
+      .eq('boutique_id', boutiqueId);
+
     setProduits(produitsData || []);
     setMouvements(mouvementsData || []);
+    setEmployes(employesData || []);
     setChargement(false);
   }
 
@@ -71,6 +78,12 @@ function Inventaire() {
   function nomProduit(idProduit) {
     const p = produits.find((p) => String(p.id) === String(idProduit));
     return p ? p.nom : 'Produit supprimé';
+  }
+
+  function nomEmploye(idEmploye) {
+    if (!idEmploye) return '—';
+    const e = employes.find((e) => String(e.id) === String(idEmploye));
+    return e ? e.nom : 'Employé supprimé';
   }
    const produitsFiltres = produits.filter((p) =>
     p.nom.toLowerCase().includes(rechercheProduit.toLowerCase())
@@ -192,6 +205,7 @@ function Inventaire() {
         type: m.type_mouvement,
         quantite: Number(m.quantite) >= 0 ? `+${m.quantite}` : String(m.quantite),
         motif: m.motif || '',
+        employe: nomEmploye(m.employe_id),
       }))
 
       const corrections = mouvementsPeriodeData
@@ -201,6 +215,7 @@ function Inventaire() {
           produit: nomProduit(m.produit_id),
           quantite: Number(m.quantite) >= 0 ? `+${m.quantite}` : String(m.quantite),
           motif: m.motif || '',
+          employe: nomEmploye(m.employe_id),
         }))
 
       genererRapportInventairePDF({
@@ -547,6 +562,7 @@ function Inventaire() {
                   <th>Type</th>
                   <th>Quantité</th>
                   <th>Motif</th>
+                  <th>Employé</th>
                 </tr>
               </thead>
               <tbody>
@@ -562,6 +578,7 @@ function Inventaire() {
                       {Number(m.quantite) >= 0 ? `+${m.quantite}` : m.quantite}
                     </td>
                     <td>{m.motif}</td>
+                    <td>{nomEmploye(m.employe_id)}</td>
                   </tr>
                 ))}
               </tbody>
