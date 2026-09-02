@@ -1,141 +1,160 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { supabase } from './supabaseClient';
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
-/**
- * Récupère les ventes d'une boutique sur une période donnée
- * et génère un rapport PDF téléchargeable.
- *
- * @param {string|number} boutiqueId
- * @param {string} dateDebut - format 'YYYY-MM-DD'
- * @param {string} dateFin - format 'YYYY-MM-DD'
- * @param {string} nomBoutique - nom affiché en en-tête du PDF
- */
-export async function genererRapportVentesPDF(boutiqueId, dateDebut, dateFin, nomBoutique) {
-  // On inclut toute la journée de fin (jusqu'à 23:59:59)
-  const dateFinComplete = `${dateFin}T23:59:59`;
-  const dateDebutComplete = `${dateDebut}T00:00:00`;
+function formaterMontant(nombre) {
+  return nombre.toLocaleString('fr-FR').replace(/\u202F|\u00A0/g, ' ')
+}
 
-  // 1. Récupérer les ventes de la période
-  const { data: ventes, error: erreurVentes } = await supabase
-    .from('sales')
-    .select('id, created_at, mode_paiement, total')
-    .eq('boutique_id', boutiqueId)
-    .gte('created_at', dateDebutComplete)
-    .lte('created_at', dateFinComplete)
-    .order('created_at', { ascending: true });
-
-  if (erreurVentes) {
-    throw new Error('Erreur lors de la récupération des ventes : ' + erreurVentes.message);
+function verifierSautDePage(doc, y, espaceNecessaire = 40) {
+  const hauteurPage = doc.internal.pageSize.height
+  if (y > hauteurPage - espaceNecessaire) {
+    doc.addPage()
+    return 20
   }
+  return y
+}
 
-  if (!ventes || ventes.length === 0) {
-    throw new Error('Aucune vente trouvée sur cette période.');
-  }
+export function genererRapportVentesPDF({ boutiqueNom, dateDebut, dateFin, indicateurs, ventesDetail }) {
+  const doc = new jsPDF()
 
-  const idsVentes = ventes.map((v) => v.id);
+  // En-tête
+  doc.setFontSize(18)
+  doc.setTextColor(201, 130, 42) // #C9822A
+  doc.text('Stockia - Rapport de ventes', 14, 18)
 
-  // 2. Récupérer les lignes de produits vendus (sale_items) liées à ces ventes
-  const { data: lignes, error: erreurLignes } = await supabase
-    .from('sale_items')
-    .select('sale_id, nom_produit, quantite, prix_unitaire')
-    .in('sale_id', idsVentes);
-
-  if (erreurLignes) {
-    throw new Error('Erreur lors de la récupération des produits vendus : ' + erreurLignes.message);
-  }
-
-  // 3. Récupérer les dépenses et achats fournisseurs de la période (pour le Bénéfice)
-  const { data: depenses } = await supabase
-    .from('depenses')
-    .select('montant')
-    .eq('boutique_id', boutiqueId)
-    .gte('created_at', dateDebutComplete)
-    .lte('created_at', dateFinComplete);
-
-  const { data: achats } = await supabase
-    .from('achats')
-    .select('montant')
-    .eq('boutique_id', boutiqueId)
-    .gte('created_at', dateDebutComplete)
-    .lte('created_at', dateFinComplete);
-
-  // 4. Calcul des indicateurs
-  const chiffreAffaires = ventes.reduce((total, v) => total + Number(v.total || 0), 0);
-
-  const totalCash = ventes
-    .filter((v) => v.mode_paiement === 'Espèces')
-    .reduce((total, v) => total + Number(v.total || 0), 0);
-
-  const totalMobile = ventes
-    .filter((v) => v.mode_paiement === 'Orange Money' || v.mode_paiement === 'Moov Money')
-    .reduce((total, v) => total + Number(v.total || 0), 0);
-
-  const totalCredit = ventes
-    .filter((v) => v.mode_paiement === 'Crédit client')
-    .reduce((total, v) => total + Number(v.total || 0), 0);
-
-  const totalDepenses = (depenses || []).reduce((t, d) => t + Number(d.montant || 0), 0);
-  const totalAchats = (achats || []).reduce((t, a) => t + Number(a.montant || 0), 0);
-  const benefice = chiffreAffaires - totalDepenses - totalAchats;
-
-  // 5. Génération du PDF
-  const doc = new jsPDF();
-
-  doc.setFontSize(16);
-  doc.text('Rapport de ventes - ' + (nomBoutique || 'Boutique'), 14, 18);
-
-  doc.setFontSize(10);
-  doc.text(`Période : du ${formaterDate(dateDebut)} au ${formaterDate(dateFin)}`, 14, 25);
+  doc.setFontSize(11)
+  doc.setTextColor(60, 60, 60)
+  doc.text(`Boutique : ${boutiqueNom}`, 14, 27)
+  doc.text(`Période : du ${dateDebut} au ${dateFin}`, 14, 33)
+  doc.text(
+    `Généré le : ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
+    14,
+    39
+  )
 
   // Tableau des indicateurs
   autoTable(doc, {
-    startY: 32,
+    startY: 46,
     head: [['Indicateur', 'Montant (FCFA)']],
-    body: [
-      ["Chiffre d'affaires", formaterMontant(chiffreAffaires)],
-      ['Bénéfice', formaterMontant(benefice)],
-      ['Total Cash (Espèces)', formaterMontant(totalCash)],
-      ['Total Mobile Money', formaterMontant(totalMobile)],
-      ['Total Crédit client', formaterMontant(totalCredit)],
-      ['Dépenses', formaterMontant(totalDepenses)],
-      ['Achats fournisseurs', formaterMontant(totalAchats)],
-    ],
-    theme: 'striped',
-    headStyles: { fillColor: [230, 145, 30] }, // orange/doré Bloc
-  });
+    body: indicateurs.map((i) => [i.label, formaterMontant(i.valeur)]),
+    headStyles: { fillColor: [201, 130, 42] },
+    styles: { fontSize: 10 },
+  })
 
-  // Tableau détaillé des produits vendus
-  const yApresIndicateurs = doc.lastAutoTable.finY + 10;
+  // Tableau détaillé des ventes
+  const yApresIndicateurs = doc.lastAutoTable.finalY + 10
+  doc.setFontSize(13)
+  doc.setTextColor(43, 38, 32)
+  doc.text('Détail des ventes', 14, yApresIndicateurs)
 
-  doc.setFontSize(12);
-  doc.text('Détail des ventes', 14, yApresIndicateurs);
+  if (ventesDetail.length === 0) {
+    doc.setFontSize(10)
+    doc.setTextColor(107, 99, 87)
+    doc.text('Aucune vente sur cette période.', 14, yApresIndicateurs + 8)
+  } else {
+    autoTable(doc, {
+      startY: yApresIndicateurs + 5,
+      head: [['Date', 'Produits vendus', 'Mode de paiement', 'Montant (FCFA)']],
+      body: ventesDetail.map((v) => [v.date, v.produits, v.modePaiement, formaterMontant(v.montant)]),
+      headStyles: { fillColor: [55, 71, 79] },
+      styles: { fontSize: 9 },
+      columnStyles: { 1: { cellWidth: 70 } },
+    })
+  }
 
-  const lignesTableau = (lignes || []).map((l) => [
-    l.nom_produit,
-    l.quantite,
-    formaterMontant(l.prix_unitaire),
-    formaterMontant(l.quantite * l.prix_unitaire),
-  ]);
+  const nomFichier = `rapport-ventes-${dateDebut.replaceAll('/', '-')}-au-${dateFin.replaceAll('/', '-')}.pdf`
+  doc.save(nomFichier)
+}
+
+export function genererRapportInventairePDF({
+  boutiqueNom,
+  dateDebut,
+  dateFin,
+  produitsValorisation,
+  valeurTotale,
+  mouvementsPeriode,
+  corrections,
+}) {
+  const doc = new jsPDF()
+
+  // En-tête
+  doc.setFontSize(18)
+  doc.setTextColor(201, 130, 42)
+  doc.text('Stockia - Rapport Inventaire', 14, 18)
+
+  doc.setFontSize(11)
+  doc.setTextColor(60, 60, 60)
+  doc.text(`Boutique : ${boutiqueNom}`, 14, 27)
+  doc.text(`Mouvements de la période : du ${dateDebut} au ${dateFin}`, 14, 33)
+  doc.text(
+    `Généré le : ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
+    14,
+    39
+  )
+
+  // Section 1 — Valorisation (état actuel du stock)
+  doc.setFontSize(13)
+  doc.setTextColor(43, 38, 32)
+  doc.text('Valorisation du stock (état actuel)', 14, 48)
 
   autoTable(doc, {
-    startY: yApresIndicateurs + 4,
-    head: [['Produit', 'Qté', 'Prix unit. (FCFA)', 'Total (FCFA)']],
-    body: lignesTableau,
-    theme: 'grid',
-    headStyles: { fillColor: [230, 145, 30] },
-  });
+    startY: 53,
+    head: [['Produit', 'Quantité', "Prix d'achat", 'Valeur (FCFA)']],
+    body: produitsValorisation.map((p) => [p.nom, String(p.quantite), formaterMontant(p.prixAchat), formaterMontant(p.valeur)]),
+    headStyles: { fillColor: [201, 130, 42] },
+    styles: { fontSize: 9 },
+  })
 
-  // 6. Téléchargement
-  const nomFichier = `rapport-ventes-${dateDebut}-au-${dateFin}.pdf`;
-  doc.save(nomFichier);
-}
+  let y = doc.lastAutoTable.finalY + 8
+  doc.setFontSize(11)
+  doc.setTextColor(43, 38, 32)
+  doc.text(`Valeur totale du stock : ${formaterMontant(valeurTotale)} FCFA`, 14, y)
+  y += 12
 
-function formaterMontant(montant) {
-  return Number(montant || 0).toLocaleString('fr-FR');
-}
+  // Section 2 — Historique des mouvements (période)
+  y = verifierSautDePage(doc, y, 50)
+  doc.setFontSize(13)
+  doc.setTextColor(43, 38, 32)
+  doc.text('Mouvements de stock (période)', 14, y)
+  y += 5
 
-function formaterDate(dateStr) {
-  const [annee, mois, jour] = dateStr.split('-');
-  return `${jour}/${mois}/${annee}`;
+  if (mouvementsPeriode.length === 0) {
+    doc.setFontSize(10)
+    doc.setTextColor(107, 99, 87)
+    doc.text('Aucun mouvement sur cette période.', 14, y + 6)
+    y += 16
+  } else {
+    autoTable(doc, {
+      startY: y + 3,
+      head: [['Date', 'Produit', 'Type', 'Quantité', 'Motif']],
+      body: mouvementsPeriode.map((m) => [m.date, m.produit, m.type, m.quantite, m.motif]),
+      headStyles: { fillColor: [55, 71, 79] },
+      styles: { fontSize: 8 },
+    })
+    y = doc.lastAutoTable.finalY + 12
+  }
+
+  // Section 3 — Corrections d'inventaire / écarts (période)
+  y = verifierSautDePage(doc, y, 50)
+  doc.setFontSize(13)
+  doc.setTextColor(43, 38, 32)
+  doc.text("Corrections d'inventaire / écarts (période)", 14, y)
+  y += 5
+
+  if (corrections.length === 0) {
+    doc.setFontSize(10)
+    doc.setTextColor(107, 99, 87)
+    doc.text("Aucune correction d'inventaire sur cette période.", 14, y + 6)
+  } else {
+    autoTable(doc, {
+      startY: y + 3,
+      head: [['Date', 'Produit', 'Écart', 'Motif']],
+      body: corrections.map((c) => [c.date, c.produit, c.quantite, c.motif]),
+      headStyles: { fillColor: [183, 28, 28] },
+      styles: { fontSize: 8 },
+    })
+  }
+
+  const nomFichier = `rapport-inventaire-${dateDebut.replaceAll('/', '-')}-au-${dateFin.replaceAll('/', '-')}.pdf`
+  doc.save(nomFichier)
 }

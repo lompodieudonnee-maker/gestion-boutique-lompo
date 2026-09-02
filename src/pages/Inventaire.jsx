@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import './Stock.css';
 import { getBoutiqueId } from '../lib/boutique'
+import { genererRapportInventairePDF } from '../lib/exportRapportPDF'
 
 function Inventaire() {
   const employeConnecte = JSON.parse(localStorage.getItem('employeConnecte'));
@@ -18,11 +19,18 @@ function Inventaire() {
   const [typeMouvement, setTypeMouvement] = useState('Entrée');
   const [motifMouvement, setMotifMouvement] = useState('');
   const [envoiMouvement, setEnvoiMouvement] = useState(false);
-    const [rechercheProduit, setRechercheProduit] = useState('');
+  const [rechercheProduit, setRechercheProduit] = useState('');
+
+  const [nomBoutique, setNomBoutique] = useState('');
+  const [panneauRapportOuvert, setPanneauRapportOuvert] = useState(false);
+  const [dateDebutRapport, setDateDebutRapport] = useState('');
+  const [dateFinRapport, setDateFinRapport] = useState('');
+  const [genererEnCours, setGenererEnCours] = useState(false);
 
   useEffect(() => {
     if (boutiqueId) {
       chargerDonnees();
+      chargerNomBoutique();
     }
   }, [boutiqueId]);
 
@@ -43,6 +51,15 @@ function Inventaire() {
     setProduits(produitsData || []);
     setMouvements(mouvementsData || []);
     setChargement(false);
+  }
+
+  async function chargerNomBoutique() {
+    const { data, error } = await supabase
+      .from('boutiques')
+      .select('nom')
+      .eq('id', boutiqueId)
+      .single()
+    if (!error && data) setNomBoutique(data.nom)
   }
 
   function quantiteActuelle(idProduit) {
@@ -137,11 +154,147 @@ function Inventaire() {
     alert('Mouvement enregistré avec succès.');
   }
 
+  function formaterDateAffichage(dateStr) {
+    const [annee, mois, jour] = dateStr.split('-')
+    return `${jour}/${mois}/${annee}`
+  }
+
+  function handleGenererRapportInventaire() {
+    if (!dateDebutRapport || !dateFinRapport) {
+      alert('Veuillez choisir une date de début et une date de fin.')
+      return
+    }
+    setGenererEnCours(true)
+    try {
+      const debut = new Date(dateDebutRapport)
+      debut.setHours(0, 0, 0, 0)
+      const fin = new Date(dateFinRapport)
+      fin.setHours(23, 59, 59, 999)
+
+      const produitsValorisation = produits.map((p) => {
+        const qte = quantiteActuelle(p.id)
+        return {
+          nom: p.nom,
+          quantite: qte,
+          prixAchat: Number(p.prix_achat || 0),
+          valeur: qte * Number(p.prix_achat || 0),
+        }
+      })
+
+      const mouvementsPeriodeData = mouvements.filter((m) => {
+        const d = new Date(m.created_at)
+        return d >= debut && d <= fin
+      })
+
+      const mouvementsPeriode = mouvementsPeriodeData.map((m) => ({
+        date: `${new Date(m.created_at).toLocaleDateString('fr-FR')} ${new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
+        produit: nomProduit(m.produit_id),
+        type: m.type_mouvement,
+        quantite: Number(m.quantite) >= 0 ? `+${m.quantite}` : String(m.quantite),
+        motif: m.motif || '',
+      }))
+
+      const corrections = mouvementsPeriodeData
+        .filter((m) => m.type_mouvement === 'Correction inventaire')
+        .map((m) => ({
+          date: new Date(m.created_at).toLocaleDateString('fr-FR'),
+          produit: nomProduit(m.produit_id),
+          quantite: Number(m.quantite) >= 0 ? `+${m.quantite}` : String(m.quantite),
+          motif: m.motif || '',
+        }))
+
+      genererRapportInventairePDF({
+        boutiqueNom: nomBoutique,
+        dateDebut: formaterDateAffichage(dateDebutRapport),
+        dateFin: formaterDateAffichage(dateFinRapport),
+        produitsValorisation,
+        valeurTotale,
+        mouvementsPeriode,
+        corrections,
+      })
+    } finally {
+      setGenererEnCours(false)
+    }
+  }
+
   if (chargement) return <div className="stock-page">Chargement...</div>;
 
   return (
     <div className="stock-page">
            <h1>Inventaire</h1>
+
+      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '16px' }}>
+        <button
+          onClick={() => setPanneauRapportOuvert(!panneauRapportOuvert)}
+          style={{
+            padding: '9px 16px',
+            backgroundColor: '#C9822A',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontFamily: 'Poppins, Arial, sans-serif',
+            fontWeight: 500,
+          }}
+        >
+          📄 Rapport PDF
+        </button>
+      </div>
+
+      {panneauRapportOuvert && (
+        <div
+          style={{
+            backgroundColor: '#FFFFFF',
+            border: '1px solid #E6E0D6',
+            borderRadius: '10px',
+            padding: '18px',
+            marginBottom: '20px',
+            maxWidth: '350px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+          }}
+        >
+          <h3 style={{ margin: 0 }}>Rapport Inventaire (PDF)</h3>
+          <p style={{ margin: 0, fontSize: '13px', color: '#6B6357' }}>
+            La valorisation reflète l'état actuel du stock. La période Du/Au ne s'applique qu'aux mouvements et corrections.
+          </p>
+          <label>
+            Du :{' '}
+            <input
+              type="date"
+              value={dateDebutRapport}
+              onChange={(e) => setDateDebutRapport(e.target.value)}
+              style={{ padding: '6px 8px', border: '1px solid #E6E0D6', borderRadius: '6px' }}
+            />
+          </label>
+          <label>
+            Au :{' '}
+            <input
+              type="date"
+              value={dateFinRapport}
+              onChange={(e) => setDateFinRapport(e.target.value)}
+              style={{ padding: '6px 8px', border: '1px solid #E6E0D6', borderRadius: '6px' }}
+            />
+          </label>
+          <button
+            onClick={handleGenererRapportInventaire}
+            disabled={genererEnCours}
+            style={{
+              padding: '9px 16px',
+              backgroundColor: '#C9822A',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontFamily: 'Poppins, Arial, sans-serif',
+              fontWeight: 500,
+            }}
+          >
+            {genererEnCours ? 'Génération...' : 'Générer le PDF'}
+          </button>
+        </div>
+      )}
 
       <input
         type="text"
