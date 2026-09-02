@@ -5,6 +5,34 @@ function ScannerProduit({ onScan, onClose }) {
   const conteneurId = 'zone-scanner-produit'
   const scannerRef = useRef(null)
   const dejaLuRef = useRef(false)
+  const arreteRef = useRef(false)
+
+  function arreterCamera() {
+    return new Promise((resolve) => {
+      if (arreteRef.current || !scannerRef.current) {
+        resolve()
+        return
+      }
+      arreteRef.current = true
+
+      try {
+        scannerRef.current
+          .stop()
+          .then(() => {
+            try {
+              scannerRef.current.clear()
+            } catch (e) {
+              // rien à faire, la zone est déjà nettoyée
+            }
+            resolve()
+          })
+          .catch(() => resolve())
+      } catch (e) {
+        // stop() a levé une erreur de façon synchrone : on l'ignore et on continue
+        resolve()
+      }
+    })
+  }
 
   useEffect(() => {
     const scanner = new Html5Qrcode(conteneurId)
@@ -18,15 +46,11 @@ function ScannerProduit({ onScan, onClose }) {
           if (dejaLuRef.current) return
           dejaLuRef.current = true
 
-          // On arrête complètement la caméra AVANT de prévenir le parent,
-          // pour éviter que React ne retire la zone vidéo pendant qu'elle est encore active.
-          scanner
-            .stop()
-            .then(() => scanner.clear())
-            .catch(() => {})
-            .finally(() => {
-              onScan(codeDecode)
-            })
+          // On arrête complètement la caméra (une seule fois, grâce au verrou)
+          // AVANT de prévenir le parent, pour éviter tout conflit avec le nettoyage automatique.
+          arreterCamera().finally(() => {
+            onScan(codeDecode)
+          })
         },
         () => {
           // erreur de lecture image par image : on ignore, c'est normal tant qu'aucun code n'est détecté
@@ -38,25 +62,12 @@ function ScannerProduit({ onScan, onClose }) {
       })
 
     return () => {
-      if (scannerRef.current) {
-        scannerRef.current
-          .stop()
-          .then(() => scannerRef.current.clear())
-          .catch(() => {})
-      }
+      arreterCamera()
     }
   }, [])
 
   function fermerManuel() {
-    if (scannerRef.current) {
-      scannerRef.current
-        .stop()
-        .then(() => scannerRef.current.clear())
-        .catch(() => {})
-        .finally(() => onClose())
-    } else {
-      onClose()
-    }
+    arreterCamera().finally(() => onClose())
   }
 
   return (
