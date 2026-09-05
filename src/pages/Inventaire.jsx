@@ -352,7 +352,7 @@ function Inventaire() {
           className={ongletActif === 'valorisation' ? 'actif' : ''}
           onClick={() => setOngletActif('valorisation')}
         >
-          Valorisation
+          Valeur du stock
         </button>
         <button
           className={ongletActif === 'comptage' ? 'actif' : ''}
