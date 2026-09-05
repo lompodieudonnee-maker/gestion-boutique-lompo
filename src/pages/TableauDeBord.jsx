@@ -87,9 +87,11 @@ function TableauDeBord({ setPageActive }) {
       
     const { debut, fin, filtrerParDate } = bornesPeriode()
       
-    // Un employé sans la permission "Voir les finances" ne voit jamais que ses propres ventes,
-    // quel que soit l'onglet de période choisi (Aujourd'hui/Semaine/Mois/Total/Perso).
-    const filtrerParEmploye = ongletPeriode === 'perso' || !peutVoirFinances
+    // Un employé "simple" (pas propriétaire, pas super-admin, sans la permission "Voir les finances")
+    // ne voit jamais que ses propres ventes, quel que soit l'onglet de période choisi.
+    // Le propriétaire et le super-admin continuent de voir toutes les ventes de la boutique.
+    const estEmployeSansFinances = employe?.role === 'employe' && !employe?.voir_finances
+    const filtrerParEmploye = ongletPeriode === 'perso' || estEmployeSansFinances
     const idEmployeCible = peutVoirFinances ? (employePerso || employe?.id) : employe?.id
 
     // --- Ventes ---
