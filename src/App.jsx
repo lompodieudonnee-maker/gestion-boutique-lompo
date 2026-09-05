@@ -78,18 +78,35 @@ function App() {
   }, [employeConnecte])
 
   function messageAlerteAbonnement() {
-    if (!boutiqueInfo || !boutiqueInfo.date_fin_essai) return null
+    if (!boutiqueInfo) return null
     const maintenant = new Date()
-    const dateFin = new Date(boutiqueInfo.date_fin_essai)
-    const joursRestants = Math.ceil((dateFin - maintenant) / (1000 * 60 * 60 * 24))
-    if (joursRestants < 0 || joursRestants > 3) return null
 
-    const dejaPaye = !!boutiqueInfo.date_dernier_paiement
-    const echeance = joursRestants === 0 ? "aujourd'hui" : `dans ${joursRestants} jour(s)`
+    // Cas 1 : encore en période d'essai gratuit (date_fin_essai renseignée et pas encore écoulée)
+    if (boutiqueInfo.date_fin_essai) {
+      const dateFin = new Date(boutiqueInfo.date_fin_essai)
+      const joursRestants = Math.ceil((dateFin - maintenant) / (1000 * 60 * 60 * 24))
+      if (joursRestants >= 0 && joursRestants <= 3) {
+        const echeance = joursRestants === 0 ? "aujourd'hui" : `dans ${joursRestants} jour(s)`
+        return `⚠️ Votre essai gratuit Stockia se termine ${echeance}. Contactez-nous pour continuer à utiliser l'application.`
+      }
+      return null
+    }
 
-    return dejaPaye
-      ? `⚠️ Votre abonnement Stockia se termine ${echeance}. Pensez à renouveler votre paiement pour continuer à utiliser l'application.`
-      : `⚠️ Votre essai gratuit Stockia se termine ${echeance}. Contactez-nous pour continuer à utiliser l'application.`
+    // Cas 2 : boutique déjà validée/payante — échéance calculée sur 30 jours depuis le dernier paiement
+    if (boutiqueInfo.date_dernier_paiement) {
+      const dateEcheance = new Date(boutiqueInfo.date_dernier_paiement)
+      dateEcheance.setDate(dateEcheance.getDate() + 30)
+      const joursRestants = Math.ceil((dateEcheance - maintenant) / (1000 * 60 * 60 * 24))
+      if (joursRestants > 3) return null
+
+      if (joursRestants >= 0) {
+        const echeance = joursRestants === 0 ? "aujourd'hui" : `dans ${joursRestants} jour(s)`
+        return `⚠️ Votre abonnement Stockia se termine ${echeance}. Pensez à renouveler votre paiement pour continuer à utiliser l'application.`
+      }
+      return `⚠️ Votre abonnement Stockia est arrivé à échéance depuis ${Math.abs(joursRestants)} jour(s). Merci de renouveler votre paiement rapidement.`
+    }
+
+    return null
   }
 
   function changerBoutiqueActive(id) {
