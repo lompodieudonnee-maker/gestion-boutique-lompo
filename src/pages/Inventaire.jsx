@@ -28,6 +28,9 @@ function Inventaire() {
   const [dateFinRapport, setDateFinRapport] = useState('');
   const [genererEnCours, setGenererEnCours] = useState(false);
 
+  const [dateDebutPertes, setDateDebutPertes] = useState('');
+  const [dateFinPertes, setDateFinPertes] = useState('');
+
   useEffect(() => {
     if (boutiqueId) {
       chargerDonnees();
@@ -91,6 +94,31 @@ function Inventaire() {
 
   const valeurTotale = produits.reduce(
     (total, p) => total + quantiteActuelle(p.id) * Number(p.prix_achat || 0),
+    0
+  );
+
+  function prixAchatProduit(idProduit) {
+    const p = produits.find((p) => String(p.id) === String(idProduit));
+    return p ? Number(p.prix_achat || 0) : 0;
+  }
+
+  const pertesToutesDates = mouvements.filter(
+    (m) => m.type_mouvement === 'Correction inventaire' && Number(m.quantite) < 0
+  );
+
+  const pertesFiltrees = (dateDebutPertes && dateFinPertes)
+    ? pertesToutesDates.filter((m) => {
+        const d = new Date(m.created_at);
+        const debut = new Date(dateDebutPertes);
+        debut.setHours(0, 0, 0, 0);
+        const fin = new Date(dateFinPertes);
+        fin.setHours(23, 59, 59, 999);
+        return d >= debut && d <= fin;
+      })
+    : pertesToutesDates;
+
+  const valeurTotalePertes = pertesFiltrees.reduce(
+    (total, m) => total + Math.abs(Number(m.quantite)) * prixAchatProduit(m.produit_id),
     0
   );
 
@@ -338,6 +366,12 @@ function Inventaire() {
         >
           Entrée / Sortie
         </button>
+        <button
+          className={ongletActif === 'pertes' ? 'actif' : ''}
+          onClick={() => setOngletActif('pertes')}
+        >
+          📉 Pertes
+        </button>
       </div>
 
       {ongletActif === 'valorisation' && (
@@ -583,6 +617,105 @@ function Inventaire() {
                 ))}
               </tbody>
             </table>
+          )}
+        </>
+      )}
+
+      {ongletActif === 'pertes' && (
+        <>
+          <p style={{ color: '#6B6357', marginBottom: '15px' }}>
+            Écarts négatifs constatés lors des comptages physiques (quantité comptée inférieure à la quantité système) —
+            avec le produit, la valeur perdue et l'employé qui a validé le comptage.
+          </p>
+
+          <div
+            style={{
+              display: 'flex',
+              gap: '12px',
+              alignItems: 'flex-end',
+              flexWrap: 'wrap',
+              backgroundColor: 'white',
+              border: '1px solid #E6E0D6',
+              borderRadius: '10px',
+              padding: '14px 16px',
+              marginBottom: '20px',
+            }}
+          >
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', color: '#6B6357', marginBottom: '4px' }}>Du</label>
+              <input
+                type="date"
+                value={dateDebutPertes}
+                onChange={(e) => setDateDebutPertes(e.target.value)}
+                style={{ padding: '7px 10px', border: '1px solid #E6E0D6', borderRadius: '6px' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', color: '#6B6357', marginBottom: '4px' }}>Au</label>
+              <input
+                type="date"
+                value={dateFinPertes}
+                onChange={(e) => setDateFinPertes(e.target.value)}
+                style={{ padding: '7px 10px', border: '1px solid #E6E0D6', borderRadius: '6px' }}
+              />
+            </div>
+            {(dateDebutPertes || dateFinPertes) && (
+              <button
+                onClick={() => { setDateDebutPertes(''); setDateFinPertes('') }}
+                style={{
+                  padding: '8px 14px',
+                  border: '1px solid #E6E0D6',
+                  borderRadius: '6px',
+                  background: 'white',
+                  color: '#6B6357',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                }}
+              >
+                Effacer les dates (tout voir)
+              </button>
+            )}
+          </div>
+
+          {pertesFiltrees.length === 0 ? (
+            <p style={{ color: '#6B6357' }}>Aucune perte constatée sur cette période. 🎉</p>
+          ) : (
+            <table className="stock-tableau">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Produit</th>
+                  <th>Quantité perdue</th>
+                  <th>Valeur perdue</th>
+                  <th>Employé</th>
+                  <th>Motif</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pertesFiltrees.map((m) => (
+                  <tr key={m.id}>
+                    <td>
+                      {new Date(m.created_at).toLocaleDateString('fr-FR')}{' '}
+                      {new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                    <td>{nomProduit(m.produit_id)}</td>
+                    <td style={{ color: '#B71C1C', fontWeight: 600 }}>{m.quantite}</td>
+                    <td style={{ color: '#B71C1C', fontWeight: 600 }}>
+                      {(Math.abs(Number(m.quantite)) * prixAchatProduit(m.produit_id)).toLocaleString('fr-FR')} FCFA
+                    </td>
+                    <td>{nomEmploye(m.employe_id)}</td>
+                    <td>{m.motif}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {pertesFiltrees.length > 0 && (
+            <h3 style={{ marginTop: '20px', color: '#B71C1C' }}>
+              Total des pertes {(dateDebutPertes || dateFinPertes) ? 'sur cette période' : '(toutes dates)'} :{' '}
+              {valeurTotalePertes.toLocaleString('fr-FR')} FCFA
+            </h3>
           )}
         </>
       )}
