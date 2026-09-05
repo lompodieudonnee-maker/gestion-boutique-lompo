@@ -7,10 +7,24 @@ function Connexion({ onConnexionReussie }) {
   const [erreur, setErreur] = useState('')
   const [chargement, setChargement] = useState(false)
 
+  const [modeRecup, setModeRecup] = useState(false)
+  const [emailRecup, setEmailRecup] = useState('')
+  const [erreurRecup, setErreurRecup] = useState('')
+  const [messageRecup, setMessageRecup] = useState('')
+  const [chargementRecup, setChargementRecup] = useState(false)
+
   function retourChoix() {
     setMode('choix')
     setPin('')
     setErreur('')
+    setModeRecup(false)
+  }
+
+  function retourChoixDepuisRecup() {
+    setModeRecup(false)
+    setErreurRecup('')
+    setMessageRecup('')
+    setEmailRecup('')
   }
 
   async function handleConnexionAdmin(e) {
@@ -35,7 +49,6 @@ function Connexion({ onConnexionReussie }) {
     const aujourdhuiNom = joursSemaine[new Date().getDay()]
     const aujourdhuiDate = new Date().toISOString().split('T')[0]
 
-    // 1. Vérifier s'il y a une exception ponctuelle pour aujourd'hui
     const { data: exception } = await supabase
       .from('exceptions_planning')
       .select('travaille')
@@ -47,9 +60,8 @@ function Connexion({ onConnexionReussie }) {
       return exception.travaille
     }
 
-    // 2. Sinon, se baser sur le planning fixe
     if (!employeData.jours_travail || employeData.jours_travail.length === 0) {
-      return true // pas de planning défini = pas de restriction
+      return true
     }
 
     return employeData.jours_travail.includes(aujourdhuiNom)
@@ -102,8 +114,47 @@ function Connexion({ onConnexionReussie }) {
 
     localStorage.setItem('employeConnecte', JSON.stringify(data))
     onConnexionReussie(data)
-    localStorage.setItem('employeConnecte', JSON.stringify(data))
-    onConnexionReussie(data)
+  }
+
+  async function handleRecuperation(e) {
+    e.preventDefault()
+    setErreurRecup('')
+    setMessageRecup('')
+    setChargementRecup(true)
+
+    const email = emailRecup.trim()
+    if (!email) {
+      setErreurRecup('Veuillez renseigner votre e-mail.')
+      setChargementRecup(false)
+      return
+    }
+
+    const { data: employeTrouve } = await supabase
+      .from('employes')
+      .select('nom, pin, email')
+      .eq('email', email)
+      .maybeSingle()
+
+    if (!employeTrouve) {
+      setErreurRecup('Aucun compte trouvé avec cet e-mail.')
+      setChargementRecup(false)
+      return
+    }
+
+    const { error } = await supabase.functions.invoke('envoyer-email', {
+      body: {
+        to: employeTrouve.email,
+        subject: 'Stockia — Votre code PIN',
+        html: `<p>Bonjour ${employeTrouve.nom},</p><p>Votre code PIN de connexion Stockia est :</p><h2 style="letter-spacing:4px;">${employeTrouve.pin}</h2><p>Ne le partagez avec personne.</p>`,
+      },
+    })
+
+    setChargementRecup(false)
+    if (error) {
+      setErreurRecup("Erreur lors de l'envoi de l'e-mail. Réessayez plus tard.")
+      return
+    }
+    setMessageRecup('Un e-mail contenant votre code PIN vient de vous être envoyé.')
   }
 
   const styleConteneur = {
@@ -156,6 +207,38 @@ function Connexion({ onConnexionReussie }) {
 
   const estAdmin = mode === 'admin'
 
+  if (modeRecup) {
+    return (
+      <div style={styleConteneur}>
+        <h1>GESTION BOUTIQUE</h1>
+        <p>Récupération du code PIN</p>
+        <p style={{ fontSize: '14px', color: '#6B6357', maxWidth: '320px', textAlign: 'center' }}>
+          Renseignez l'e-mail enregistré sur votre compte pour recevoir votre code PIN.
+        </p>
+        <form onSubmit={handleRecuperation} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <input
+            type="email"
+            value={emailRecup}
+            onChange={(e) => setEmailRecup(e.target.value)}
+            placeholder="vous@exemple.com"
+            style={{ padding: '10px', width: '260px', marginBottom: '1rem', textAlign: 'center' }}
+            autoFocus
+          />
+          <button type="submit" disabled={chargementRecup} style={{ fontSize: '1.1rem', padding: '0.5rem 2rem' }}>
+            {chargementRecup ? 'Envoi...' : 'Recevoir mon code PIN'}
+          </button>
+        </form>
+
+        {erreurRecup && <p style={{ color: 'red' }}>{erreurRecup}</p>}
+        {messageRecup && <div className="connexion-message-recup">{messageRecup}</div>}
+
+        <button onClick={retourChoixDepuisRecup} className="connexion-lien-secondaire">
+          ← Retour à la connexion
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div style={styleConteneur}>
       <h1>GESTION BOUTIQUE</h1>
@@ -179,52 +262,32 @@ function Connexion({ onConnexionReussie }) {
           autoFocus
         />
         <br />
-        <button
-          type="submit"
-          disabled={chargement}
-          style={{
-            fontSize: '1.2rem',
-            padding: '0.5rem 2rem',
-          }}
-        >
+        <button type="submit" disabled={chargement} style={{ fontSize: '1.2rem', padding: '0.5rem 2rem' }}>
           {chargement ? 'Connexion...' : 'Se connecter'}
         </button>
       </form>
+
+      {!estAdmin && (
+        <button onClick={() => setModeRecup(true)} className="connexion-lien-secondaire-accent">
+          Code PIN oublié ?
+        </button>
+      )}
 
       {erreur && (
         <div style={{ textAlign: 'center' }}>
           <p style={{ color: 'red' }}>{erreur}</p>
           {erreur.includes('essai') && (
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '8px' }}>
-              <a
-                href="https://wa.me/22655006657"
+              
+                href="https://wa.me/22655006657"<a
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{
-                  padding: '8px 14px',
-                  borderRadius: '8px',
-                  backgroundColor: '#25D366',
-                  color: 'white',
-                  textDecoration: 'none',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                }}
+                className="connexion-lien-whatsapp"
               >
                 WhatsApp
               </a>
 
-              <a
-                href="tel:+22663732443"
-                style={{
-                  padding: '8px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #E6E0D6',
-                  color: '#2B2620',
-                  textDecoration: 'none',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                }}
-              >
+              <a href="tel:+22663732443" className="connexion-lien-appeler">
                 Appeler
               </a>
             </div>
@@ -232,18 +295,7 @@ function Connexion({ onConnexionReussie }) {
         </div>
       )}
 
-      <button
-        onClick={retourChoix}
-        style={{
-          marginTop: '1.5rem',
-          background: 'none',
-          border: 'none',
-          color: '#6B6357',
-          fontSize: '14px',
-          cursor: 'pointer',
-          textDecoration: 'underline',
-        }}
-      >
+      <button onClick={retourChoix} className="connexion-lien-secondaire">
         Retour
       </button>
     </div>

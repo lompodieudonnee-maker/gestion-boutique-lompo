@@ -39,6 +39,9 @@ function GestionEmployes() {
   const [nouveauSalairePeriode, setNouveauSalairePeriode] = useState('')
   const [envoiSalaire, setEnvoiSalaire] = useState(false)
 
+  const [emailInputs, setEmailInputs] = useState({})
+  const [enregistrementEmailId, setEnregistrementEmailId] = useState(null)
+
   const employeConnecte = JSON.parse(localStorage.getItem('employeConnecte'))
   const estSuperadmin = employeConnecte?.role === 'superadmin'
 
@@ -146,6 +149,27 @@ function GestionEmployes() {
 
     if (error) {
       setErreur("Erreur lors de la suppression (cet employé a peut-être des ventes liées)")
+      return
+    }
+    chargerEmployes()
+  }
+
+  // ============================================================
+  // E-MAIL (récupération PIN)
+  // ============================================================
+
+  function emailValeur(employe) {
+    return emailInputs[employe.id] !== undefined ? emailInputs[employe.id] : (employe.email || '')
+  }
+
+  async function enregistrerEmail(id) {
+    const email = (emailInputs[id] || '').trim()
+    setEnregistrementEmailId(id)
+    const { error } = await supabase.from('employes').update({ email }).eq('id', id)
+    setEnregistrementEmailId(null)
+
+    if (error) {
+      setErreur("Erreur lors de l'enregistrement de l'e-mail")
       return
     }
     chargerEmployes()
@@ -371,11 +395,13 @@ function GestionEmployes() {
           </form>
 
           <h3>Liste des employés</h3>
+          <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ backgroundColor: '#333', color: 'white' }}>
                 <th style={{ padding: '10px', textAlign: 'left' }}>Nom</th>
                 <th style={{ padding: '10px', textAlign: 'left' }}>Rôle</th>
+                <th style={{ padding: '10px', textAlign: 'left' }}>E-mail (récupération PIN)</th>
                 {PERMISSIONS.map((p) => (
                   <th key={p.cle} style={{ padding: '10px', textAlign: 'center' }}>{p.label}</th>
                 ))}
@@ -390,6 +416,24 @@ function GestionEmployes() {
                   <tr key={employe.id} style={{ borderBottom: '1px solid #ddd' }}>
                     <td style={{ padding: '10px' }}>{employe.nom}</td>
                     <td style={{ padding: '10px' }}>{employe.role}</td>
+                    <td style={{ padding: '10px' }}>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <input
+                          type="email"
+                          value={emailValeur(employe)}
+                          onChange={(e) => setEmailInputs({ ...emailInputs, [employe.id]: e.target.value })}
+                          placeholder="email@exemple.com"
+                          style={{ padding: '6px', width: '170px' }}
+                        />
+                        <button
+                          onClick={() => enregistrerEmail(employe.id)}
+                          disabled={enregistrementEmailId === employe.id}
+                          style={{ padding: '5px 10px', fontSize: '12px', cursor: 'pointer' }}
+                        >
+                          {enregistrementEmailId === employe.id ? '...' : 'Enregistrer'}
+                        </button>
+                      </div>
+                    </td>
                     {PERMISSIONS.map((p) => (
                       <td key={p.cle} style={{ padding: '10px', textAlign: 'center' }}>
                         <input
@@ -423,7 +467,7 @@ function GestionEmployes() {
 
                   {planningOuvertId === employe.id && (
                     <tr>
-                      <td colSpan={PERMISSIONS.length + 5} style={{ padding: '15px', backgroundColor: '#faf8f5', border: '1px solid #E6E0D6' }}>
+                      <td colSpan={PERMISSIONS.length + 6} style={{ padding: '15px', backgroundColor: '#faf8f5', border: '1px solid #E6E0D6' }}>
                         <strong>Planning fixe de {employe.nom}</strong>
                         <p style={{ fontSize: '13px', color: '#6B6357', margin: '4px 0 10px' }}>
                           Cochez les jours où {employe.nom} travaille. Si aucun jour n'est coché, il n'y a aucune restriction (il peut se connecter tous les jours).
@@ -496,7 +540,7 @@ function GestionEmployes() {
 
                   {salaireOuvertId === employe.id && (
                     <tr>
-                      <td colSpan={PERMISSIONS.length + 5} style={{ padding: '15px', backgroundColor: '#faf8f5', border: '1px solid #E6E0D6' }}>
+                      <td colSpan={PERMISSIONS.length + 6} style={{ padding: '15px', backgroundColor: '#faf8f5', border: '1px solid #E6E0D6' }}>
                         <strong>💰 Salaire de {employe.nom}</strong>
                         <p style={{ fontSize: '13px', color: '#6B6357', margin: '4px 0 15px' }}>
                           Enregistrez un paiement de salaire. Il sera automatiquement compté dans vos Dépenses.
@@ -569,6 +613,7 @@ function GestionEmployes() {
               ))}
             </tbody>
           </table>
+          </div>
         </>
       )}
     </div>
