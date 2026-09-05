@@ -106,23 +106,38 @@ function TableauDeBord({ setPageActive }) {
     const ventesTriees = [...ventesToutesPeriode].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 20)
     setVentesRecentes(ventesTriees)
 
-    // --- Dernières ventes (produits vendus) ---
+    // --- Articles vendus sur la période (pour le détail ET pour le coût des marchandises vendues) ---
     const idsVentesFiltrees = ventesFiltrees.map((v) => v.id)
     const dateParVente = {}
     ventesFiltrees.forEach((v) => { dateParVente[v.id] = v.created_at })
 
     const { data: itemsVentes } = await supabase
       .from('sale_items')
-      .select('nom_produit, quantite, sale_id')
+      .select('nom_produit, quantite, sale_id, product_id')
       .eq('boutique_id', boutiqueId)
 
-    const itemsFiltres = (itemsVentes || [])
+    const itemsPeriode = (itemsVentes || [])
       .filter((item) => idsVentesFiltrees.includes(item.sale_id))
       .map((item) => ({ ...item, date: dateParVente[item.sale_id] }))
+
+    const itemsFiltres = [...itemsPeriode]
       .sort((a, b) => new Date(b.date) - new Date(a.date))
       .slice(0, 15)
 
     setDernieresVentes(itemsFiltres)
+
+    // --- Coût des marchandises vendues (base du vrai calcul de bénéfice) ---
+    const { data: produitsCout } = await supabase
+      .from('products')
+      .select('id, prix_achat')
+      .eq('boutique_id', boutiqueId)
+    const prixAchatParProduit = {}
+    ;(produitsCout || []).forEach((p) => { prixAchatParProduit[p.id] = Number(p.prix_achat || 0) })
+    const coutMarchandisesVendues = itemsPeriode.reduce(
+      (s, item) => s + (prixAchatParProduit[item.product_id] || 0) * Number(item.quantite || 0),
+      0
+    )
+
     const ca = ventesFiltrees.reduce((s, v) => s + Number(v.total || 0), 0)
     const cash = ventesFiltrees
       .filter((v) => v.mode_paiement === 'Espèces')
@@ -144,20 +159,14 @@ function TableauDeBord({ setPageActive }) {
       : (depenses || [])
     const totalDepenses = depensesFiltrees.reduce((s, d) => s + Number(d.montant || 0), 0)
 
-    // --- Achats fournisseurs ---
+    // --- Achats fournisseurs (utilisés uniquement pour les dettes, plus pour le bénéfice) ---
     const { data: achats } = await supabase
       .from('achats')
       .select('montant_total, montant_paye, created_at, date_achat')
       .eq('boutique_id', boutiqueId)
-    const achatsFiltres = filtrerParDate
-      ? (achats || []).filter((a) => {
-          const dateA = new Date(a.date_achat || a.created_at)
-          return dateA >= debut && dateA <= fin
-        })
-      : (achats || [])
-    const totalAchats = achatsFiltres.reduce((s, a) => s + Number(a.montant_total || 0), 0)
 
-    setMargeBrute(ca - totalDepenses - totalAchats)
+    // Bénéfice = Chiffre d'affaires - Coût des produits réellement vendus - Dépenses de fonctionnement
+    setMargeBrute(ca - coutMarchandisesVendues - totalDepenses)
 
     // Dettes fournisseurs (toujours globales)
     const dettesF = (achats || []).reduce(
