@@ -240,3 +240,29 @@ h1, h2, h3, h4 {
     flex-direction: column-reverse;
   }
 }
+.alerte-abonnement {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  background-color: #FFF4E5;
+  border: 1px solid #E4A400;
+  color: #7A4E00;
+  border-radius: 8px;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.alerte-abonnement-bouton {
+  padding: 6px 14px;
+  border-radius: 8px;
+  background-color: #25D366;
+  color: white;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}

@@ -33,7 +33,7 @@ function App() {
 
   const [boutiqueInfo, setBoutiqueInfo] = useState(null)
 
-    useEffect(() => {
+  useEffect(() => {
     if (employeConnecte?.role === 'superadmin') {
       supabase.from('boutiques').select('*').then(({ data }) => {
         if (data) {
@@ -46,7 +46,8 @@ function App() {
       })
     }
   }, [employeConnecte])
-    useEffect(() => {
+
+  useEffect(() => {
     async function rafraichirEmploye() {
       if (!employeConnecte || employeConnecte.role === 'superadmin') return
 
@@ -81,7 +82,6 @@ function App() {
     if (!boutiqueInfo) return null
     const maintenant = new Date()
 
-    // Cas 1 : encore en période d'essai gratuit (date_fin_essai renseignée et pas encore écoulée)
     if (boutiqueInfo.date_fin_essai) {
       const dateFin = new Date(boutiqueInfo.date_fin_essai)
       const joursRestants = Math.ceil((dateFin - maintenant) / (1000 * 60 * 60 * 24))
@@ -92,7 +92,6 @@ function App() {
       return null
     }
 
-    // Cas 2 : boutique déjà validée/payante — échéance calculée sur 30 jours depuis le dernier paiement
     if (boutiqueInfo.date_dernier_paiement) {
       const dateEcheance = new Date(boutiqueInfo.date_dernier_paiement)
       dateEcheance.setDate(dateEcheance.getDate() + 30)
@@ -139,23 +138,23 @@ function App() {
   const classeBouton = (page) => `app-sidebar-bouton${pageActive === page ? ' actif' : ''}`
 
   const elementsMenuComplet = [
-  { page: 'tableauDeBord', icone: '📊', label: 'Tableau de bord' },
-  { page: 'caisse', icone: '🛒', label: 'Vente' },
-  { page: 'produits', icone: '📦', label: 'Produits' },
-  { page: 'inventaire', icone: '📋', label: 'Inventaire' },
-  { page: 'commande', icone: '📝', label: 'Commande' },
-  { page: 'proforma', icone: '📄', label: 'Proforma' },
-  { page: 'stock', icone: '📊', label: 'Stock', permission: 'peut_gerer_stock' },
-  { page: 'clients', icone: '👥', label: 'Clients' },
-  { page: 'fournisseurs', icone: '🚚', label: 'Fournisseurs' },
-  { page: 'depenses', icone: '💰', label: 'Dépenses' },
-]
+    { page: 'tableauDeBord', icone: '📊', label: 'Tableau de bord' },
+    { page: 'caisse', icone: '🛒', label: 'Vente' },
+    { page: 'produits', icone: '📦', label: 'Produits' },
+    { page: 'inventaire', icone: '📋', label: 'Inventaire' },
+    { page: 'commande', icone: '📝', label: 'Commande' },
+    { page: 'proforma', icone: '📄', label: 'Proforma' },
+    { page: 'stock', icone: '📊', label: 'Stock', permission: 'peut_gerer_stock' },
+    { page: 'clients', icone: '👥', label: 'Clients' },
+    { page: 'fournisseurs', icone: '🚚', label: 'Fournisseurs' },
+    { page: 'depenses', icone: '💰', label: 'Dépenses' },
+  ]
 
-const elementsMenu = elementsMenuComplet.filter((item) => {
-  if (!item.permission) return true
-  if (estProprietaire || estSuperAdmin) return true
-  return !!employeConnecte[item.permission]
-})
+  const elementsMenu = elementsMenuComplet.filter((item) => {
+    if (!item.permission) return true
+    if (estProprietaire || estSuperAdmin) return true
+    return !!employeConnecte[item.permission]
+  })
 
   const alerteAbonnement = messageAlerteAbonnement()
 
@@ -226,39 +225,9 @@ const elementsMenu = elementsMenuComplet.filter((item) => {
 
       <div className="app-contenu">
         {alerteAbonnement && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '10px',
-              backgroundColor: '#FFF4E5',
-              border: '1px solid #E4A400',
-              color: '#7A4E00',
-              borderRadius: '8px',
-              padding: '10px 16px',
-              marginBottom: '16px',
-              fontSize: '14px',
-              fontWeight: 600,
-            }}
-          >
+          <div className="alerte-abonnement">
             <span>{alerteAbonnement}</span>
-            
-              href="https://wa.me/22655006657"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                padding: '6px 14px',
-                borderRadius: '8px',
-                backgroundColor: '#25D366',
-                color: 'white',
-                textDecoration: 'none',
-                fontSize: '13px',
-                fontWeight: 700,
-                whiteSpace: 'nowrap',
-              }}
-            >
+            <a href="https://wa.me/22655006657" target="_blank" rel="noopener noreferrer" className="alerte-abonnement-bouton">
               Renouveler sur WhatsApp
             </a>
           </div>
@@ -274,7 +243,7 @@ const elementsMenu = elementsMenuComplet.filter((item) => {
         {pageActive === 'clients' && <Clients />}
         {pageActive === 'fournisseurs' && <Fournisseurs />}
         {pageActive === 'depenses' && <Depenses />}
-                {pageActive === 'employes' && (estProprietaire || estSuperAdmin) && <GestionEmployes />}
+        {pageActive === 'employes' && (estProprietaire || estSuperAdmin) && <GestionEmployes />}
         {pageActive === 'adminBoutiques' && estSuperAdmin && <AdminBoutiques />}
       </div>
     </div>
