@@ -32,6 +32,11 @@ function GestionEmployes() {
   const [nouvelleExceptionDate, setNouvelleExceptionDate] = useState('')
   const [nouvelleExceptionTravaille, setNouvelleExceptionTravaille] = useState('non')
 
+  const [cycleTravail, setCycleTravail] = useState('')
+  const [cycleRepos, setCycleRepos] = useState('')
+  const [cycleDateDebut, setCycleDateDebut] = useState('')
+  const [envoiCycle, setEnvoiCycle] = useState(false)
+
   const [salaireOuvertId, setSalaireOuvertId] = useState(null)
   const [salaires, setSalaires] = useState([])
   const [nouveauSalaireMontant, setNouveauSalaireMontant] = useState('')
@@ -186,7 +191,62 @@ function GestionEmployes() {
     }
     setSalaireOuvertId(null)
     setPlanningOuvertId(employe.id)
+    setCycleTravail(employe.cycle_jours_travail || '')
+    setCycleRepos(employe.cycle_jours_repos || '')
+    setCycleDateDebut(employe.cycle_date_debut || '')
     await chargerExceptions(employe.id)
+  }
+
+  function statutCycleAujourdhui(employe) {
+    if (!employe.cycle_jours_travail || !employe.cycle_jours_repos || !employe.cycle_date_debut) return null
+    const debut = new Date(employe.cycle_date_debut + 'T00:00:00')
+    const aujourdhui = new Date()
+    aujourdhui.setHours(0, 0, 0, 0)
+    const joursEcoules = Math.floor((aujourdhui - debut) / (1000 * 60 * 60 * 24))
+    const dureeCycle = Number(employe.cycle_jours_travail) + Number(employe.cycle_jours_repos)
+    const position = ((joursEcoules % dureeCycle) + dureeCycle) % dureeCycle
+    return position < Number(employe.cycle_jours_travail)
+  }
+
+  async function enregistrerCycle(employe) {
+    const jt = parseInt(cycleTravail, 10)
+    const jr = parseInt(cycleRepos, 10)
+    if (!jt || jt <= 0 || !jr || jr <= 0 || !cycleDateDebut) {
+      alert('Renseignez le nombre de jours travaillés, le nombre de jours de repos, et la date du 1er jour travaillé du cycle.')
+      return
+    }
+    setEnvoiCycle(true)
+    const { error } = await supabase
+      .from('employes')
+      .update({
+        cycle_jours_travail: jt,
+        cycle_jours_repos: jr,
+        cycle_date_debut: cycleDateDebut,
+      })
+      .eq('id', employe.id)
+    setEnvoiCycle(false)
+    if (error) {
+      alert('Erreur : ' + error.message)
+      return
+    }
+    chargerEmployes()
+    alert('Planning en cycle enregistré.')
+  }
+
+  async function reinitialiserCycle(employe) {
+    if (!confirm('Retirer le planning en cycle de cet employé ?')) return
+    const { error } = await supabase
+      .from('employes')
+      .update({ cycle_jours_travail: null, cycle_jours_repos: null, cycle_date_debut: null })
+      .eq('id', employe.id)
+    if (error) {
+      alert('Erreur : ' + error.message)
+      return
+    }
+    setCycleTravail('')
+    setCycleRepos('')
+    setCycleDateDebut('')
+    chargerEmployes()
   }
 
   async function chargerExceptions(employeId) {
@@ -490,6 +550,62 @@ function GestionEmployes() {
                         >
                           Réinitialiser (aucune restriction)
                         </button>
+
+                        <hr style={{ border: 'none', borderTop: '1px solid #E6E0D6', margin: '10px 0' }} />
+
+                        <strong>Planning en cycle (roulement, ex : 3 jours travaillés / 3 jours de repos)</strong>
+                        <p style={{ fontSize: '13px', color: '#6B6357', margin: '4px 0 10px' }}>
+                          Pratique pour une relève régulière entre employés. Si un cycle est défini ici, il prend le dessus sur les jours fixes ci-dessus.
+                        </p>
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: '10px' }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '12px', color: '#6B6357', marginBottom: '4px' }}>Jours travaillés</label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={cycleTravail}
+                              onChange={(e) => setCycleTravail(e.target.value)}
+                              style={{ width: '80px', padding: '6px' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '12px', color: '#6B6357', marginBottom: '4px' }}>Jours de repos</label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={cycleRepos}
+                              onChange={(e) => setCycleRepos(e.target.value)}
+                              style={{ width: '80px', padding: '6px' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '12px', color: '#6B6357', marginBottom: '4px' }}>1er jour travaillé du cycle</label>
+                            <input
+                              type="date"
+                              value={cycleDateDebut}
+                              onChange={(e) => setCycleDateDebut(e.target.value)}
+                              style={{ padding: '6px' }}
+                            />
+                          </div>
+                          <button onClick={() => enregistrerCycle(employe)} disabled={envoiCycle} style={{ padding: '7px 14px', cursor: 'pointer' }}>
+                            {envoiCycle ? 'Enregistrement...' : 'Enregistrer le cycle'}
+                          </button>
+                        </div>
+
+                        {employe.cycle_jours_travail && employe.cycle_jours_repos && employe.cycle_date_debut && (
+                          <p style={{ fontSize: '13px', marginBottom: '15px' }}>
+                            Cycle actif : {employe.cycle_jours_travail}j travail / {employe.cycle_jours_repos}j repos, à partir du {new Date(employe.cycle_date_debut).toLocaleDateString('fr-FR')}.{' '}
+                            <strong style={{ color: statutCycleAujourdhui(employe) ? '#2E7D32' : '#B71C1C' }}>
+                              Aujourd'hui : {statutCycleAujourdhui(employe) ? 'Travaille ✅' : 'Repos ❌'}
+                            </strong>{' '}
+                            <button
+                              onClick={() => reinitialiserCycle(employe)}
+                              style={{ fontSize: '12px', color: '#6B6357', background: 'none', border: '1px solid #E6E0D6', borderRadius: '6px', padding: '3px 8px', cursor: 'pointer', marginLeft: '8px' }}
+                            >
+                              Retirer le cycle
+                            </button>
+                          </p>
+                        )}
 
                         <hr style={{ border: 'none', borderTop: '1px solid #E6E0D6', margin: '10px 0' }} />
 

@@ -61,6 +61,16 @@ function Connexion({ onConnexionReussie }) {
       return exception.travaille
     }
 
+    // Planning en cycle (roulement, ex : 3 jours travaillés / 3 jours de repos) — prioritaire sur les jours fixes
+    if (employeData.cycle_jours_travail && employeData.cycle_jours_repos && employeData.cycle_date_debut) {
+      const debut = new Date(employeData.cycle_date_debut + 'T00:00:00')
+      const aujourdhui = new Date(aujourdhuiDate + 'T00:00:00')
+      const joursEcoules = Math.floor((aujourdhui - debut) / (1000 * 60 * 60 * 24))
+      const dureeCycle = Number(employeData.cycle_jours_travail) + Number(employeData.cycle_jours_repos)
+      const position = ((joursEcoules % dureeCycle) + dureeCycle) % dureeCycle
+      return position < Number(employeData.cycle_jours_travail)
+    }
+
     if (!employeData.jours_travail || employeData.jours_travail.length === 0) {
       return true
     }
