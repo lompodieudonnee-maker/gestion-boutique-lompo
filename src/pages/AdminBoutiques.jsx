@@ -64,6 +64,51 @@ function AdminBoutiques({ onDeconnexion }) {
     return fin < new Date()
   }
 
+  function joursRestants(date) {
+    if (!date) return null
+    const diff = new Date(date) - new Date()
+    return Math.ceil(diff / (1000 * 60 * 60 * 24))
+  }
+
+  // Retourne l'état d'échéance d'une boutique : 'expire' | 'relance' | null
+  function etatEcheance(boutique) {
+    if (boutique.date_fin_essai) {
+      const j = joursRestants(boutique.date_fin_essai)
+      if (j === null) return null
+      if (j < 0) return 'expire'
+      if (j <= 3) return 'relance'
+      return null
+    }
+    if (boutique.date_dernier_paiement) {
+      const j = joursRestants(dateFinCouverture(boutique))
+      if (j === null) return null
+      if (j < 0) return 'expire'
+      if (j <= 3) return 'relance'
+      return null
+    }
+    return null
+  }
+
+  function texteEcheance(boutique) {
+    const etat = etatEcheance(boutique)
+    if (!etat) return null
+
+    const enEssai = !!boutique.date_fin_essai
+    const j = enEssai
+      ? joursRestants(boutique.date_fin_essai)
+      : joursRestants(dateFinCouverture(boutique))
+
+    if (etat === 'expire') {
+      return enEssai
+        ? `⚠️ Essai expiré depuis ${Math.abs(j)} jour(s)`
+        : `⚠️ Abonnement en retard depuis ${Math.abs(j)} jour(s)`
+    }
+    const echeance = j === 0 ? "aujourd'hui" : `dans ${j} jour(s)`
+    return enEssai
+      ? `⚠️ Essai gratuit se termine ${echeance}`
+      : `⚠️ Abonnement se termine ${echeance}`
+  }
+
   const stylePastille = (statut) => {
     const couleurs = {
       en_attente: { bg: '#FDECE1', color: '#C9822A' },
@@ -80,6 +125,14 @@ function AdminBoutiques({ onDeconnexion }) {
       fontWeight: 600,
     }
   }
+
+  const styleCarteEcheance = (etat) => {
+    if (etat === 'expire') return { backgroundColor: '#FCECEC', borderColor: '#C62828' }
+    if (etat === 'relance') return { backgroundColor: '#FFF8EC', borderColor: '#E4A400' }
+    return {}
+  }
+
+  const boutiquesASurveiller = boutiques.filter((b) => etatEcheance(b) !== null)
 
   return (
     <div style={{ padding: '20px', fontFamily: 'Poppins, Arial, sans-serif', maxWidth: '900px', margin: '0 auto' }}>
@@ -100,117 +153,151 @@ function AdminBoutiques({ onDeconnexion }) {
         </button>
       </div>
 
+      {!chargement && boutiquesASurveiller.length > 0 && (
+        <div
+          style={{
+            backgroundColor: '#FFF4E5',
+            border: '1px solid #E4A400',
+            color: '#7A4E00',
+            borderRadius: '10px',
+            padding: '12px 16px',
+            marginBottom: '20px',
+            fontSize: '14px',
+            fontWeight: 600,
+          }}
+        >
+          ⚠️ {boutiquesASurveiller.length} boutique(s) à surveiller (essai ou abonnement proche de l'échéance / en retard)
+        </div>
+      )}
+
       {chargement ? (
         <p>Chargement...</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {boutiques.length === 0 && <p>Aucune boutique enregistrée.</p>}
-          {boutiques.map((b) => (
-            <div
-              key={b.id}
-              style={{
-                border: '1px solid #E6E0D6',
-                borderRadius: '10px',
-                padding: '16px 20px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '10px',
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '16px' }}>{b.nom}</div>
-                <div style={{ fontSize: '13px', color: '#6B6357' }}>
-                  📞 {b.telephone || 'Non renseigné'}
-                </div>
-                {b.date_fin_essai && (
+          {boutiques.map((b) => {
+            const etat = etatEcheance(b)
+            const texte = texteEcheance(b)
+            return (
+              <div
+                key={b.id}
+                style={{
+                  border: '1px solid #E6E0D6',
+                  borderRadius: '10px',
+                  padding: '16px 20px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '10px',
+                  ...styleCarteEcheance(etat),
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '16px' }}>{b.nom}</div>
                   <div style={{ fontSize: '13px', color: '#6B6357' }}>
-                    Essai jusqu'au {new Date(b.date_fin_essai).toLocaleDateString('fr-FR')}
+                    📞 {b.telephone || 'Non renseigné'}
                   </div>
-                )}
-                <div style={{ fontSize: '13px', color: paiementEnRetard(b) ? '#C62828' : '#6B6357', fontWeight: paiementEnRetard(b) ? 600 : 400 }}>
-                  💰 Dernier paiement : {b.date_dernier_paiement ? new Date(b.date_dernier_paiement).toLocaleDateString('fr-FR') : 'Aucun'}
-                  {paiementEnRetard(b) && ' ⚠️ En retard'}
-                </div>
-                {dateFinCouverture(b) && (
+                  {b.date_fin_essai && (
+                    <div style={{ fontSize: '13px', color: '#6B6357' }}>
+                      Essai jusqu'au {new Date(b.date_fin_essai).toLocaleDateString('fr-FR')}
+                    </div>
+                  )}
                   <div style={{ fontSize: '13px', color: paiementEnRetard(b) ? '#C62828' : '#6B6357', fontWeight: paiementEnRetard(b) ? 600 : 400 }}>
-                    📅 Couvert jusqu'au : {dateFinCouverture(b).toLocaleDateString('fr-FR')}
+                    💰 Dernier paiement : {b.date_dernier_paiement ? new Date(b.date_dernier_paiement).toLocaleDateString('fr-FR') : 'Aucun'}
+                    {paiementEnRetard(b) && ' ⚠️ En retard'}
                   </div>
-                )}
-              </div>
+                  {dateFinCouverture(b) && (
+                    <div style={{ fontSize: '13px', color: paiementEnRetard(b) ? '#C62828' : '#6B6357', fontWeight: paiementEnRetard(b) ? 600 : 400 }}>
+                      📅 Couvert jusqu'au : {dateFinCouverture(b).toLocaleDateString('fr-FR')}
+                    </div>
+                  )}
+                  {texte && (
+                    <div
+                      style={{
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        marginTop: '4px',
+                        color: etat === 'expire' ? '#C62828' : '#9A5B0A',
+                      }}
+                    >
+                      {texte}
+                    </div>
+                  )}
+                </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <span style={stylePastille(b.statut)}>{b.statut}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  <span style={stylePastille(b.statut)}>{b.statut}</span>
 
-                <button
-                  onClick={() => marquerPaiementRecu(b.id)}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: '8px',
-                    border: '1px solid #C9822A',
-                    background: 'white',
-                    color: '#C9822A',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  💰 Marquer paiement reçu
-                </button>
-
-                {b.statut === 'en_attente' && (
                   <button
-                    onClick={() => validerBoutique(b.id)}
+                    onClick={() => marquerPaiementRecu(b.id)}
                     style={{
                       padding: '8px 16px',
                       borderRadius: '8px',
-                      border: 'none',
-                      backgroundColor: '#2E7D32',
-                      color: 'white',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    ✅ Valider
-                  </button>
-                )}
-
-                {b.statut === 'active' && (
-                  <button
-                    onClick={() => suspendreBoutique(b.id)}
-                    style={{
-                      padding: '8px 16px',
-                      borderRadius: '8px',
-                      border: '1px solid #C62828',
+                      border: '1px solid #C9822A',
                       background: 'white',
-                      color: '#C62828',
+                      color: '#C9822A',
                       fontWeight: 600,
                       cursor: 'pointer',
                     }}
                   >
-                    Suspendre
+                    💰 Marquer paiement reçu
                   </button>
-                )}
 
-                {b.statut === 'suspendue' && (
-                  <button
-                    onClick={() => validerBoutique(b.id)}
-                    style={{
-                      padding: '8px 16px',
-                      borderRadius: '8px',
-                      border: 'none',
-                      backgroundColor: '#2E7D32',
-                      color: 'white',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Réactiver
-                  </button>
-                )}
+                  {b.statut === 'en_attente' && (
+                    <button
+                      onClick={() => validerBoutique(b.id)}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        backgroundColor: '#2E7D32',
+                        color: 'white',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      ✅ Valider
+                    </button>
+                  )}
+
+                  {b.statut === 'active' && (
+                    <button
+                      onClick={() => suspendreBoutique(b.id)}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        border: '1px solid #C62828',
+                        background: 'white',
+                        color: '#C62828',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Suspendre
+                    </button>
+                  )}
+
+                  {b.statut === 'suspendue' && (
+                    <button
+                      onClick={() => validerBoutique(b.id)}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        backgroundColor: '#2E7D32',
+                        color: 'white',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Réactiver
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
