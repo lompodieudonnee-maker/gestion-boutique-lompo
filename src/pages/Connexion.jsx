@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import '../App.css'
 
 function Connexion({ onConnexionReussie }) {
   const [mode, setMode] = useState('choix') // 'choix' | 'boutique' | 'admin'
@@ -278,12 +279,7 @@ function Connexion({ onConnexionReussie }) {
           <p style={{ color: 'red' }}>{erreur}</p>
           {erreur.includes('essai') && (
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '8px' }}>
-              
-                href="https://wa.me/22655006657"<a
-                target="_blank"
-                rel="noopener noreferrer"
-                className="connexion-lien-whatsapp"
-              >
+              <a href="https://wa.me/22655006657" target="_blank" rel="noopener noreferrer" className="connexion-lien-whatsapp">
                 WhatsApp
               </a>
 
