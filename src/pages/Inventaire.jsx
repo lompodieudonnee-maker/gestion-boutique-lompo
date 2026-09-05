@@ -408,6 +408,22 @@ function Inventaire() {
 
       {ongletActif === 'comptage' && (
         <>
+          <div
+            style={{
+              backgroundColor: '#FDECE1',
+              border: '1px solid #F3D2B0',
+              borderRadius: '10px',
+              padding: '14px 18px',
+              marginBottom: '18px',
+              fontSize: '13px',
+              color: '#6B4A1F',
+              maxWidth: '600px',
+              fontWeight: 600,
+              lineHeight: 1.5,
+            }}
+          >
+            ⚠️ Comptez pour de vrai, ne recopiez jamais le chiffre du système. Un écart signalé honnêtement n'est pas une faute — c'est ne pas le signaler qui pose problème.
+          </div>
           <p style={{ color: '#6B6357', marginBottom: '15px' }}>
             Comptez physiquement chaque produit en boutique et saisissez la quantité réelle trouvée. Laissez vide les produits non comptés.
           </p>
