@@ -287,6 +287,15 @@ function Caisse() {
       }
     }
 
+        const debutJour = new Date()
+    debutJour.setHours(0, 0, 0, 0)
+    const { count: ventesAujourdhui } = await supabase
+      .from('sales')
+      .select('id', { count: 'exact', head: true })
+      .eq('boutique_id', boutiqueId)
+      .gte('created_at', debutJour.toISOString())
+    const numeroDuJour = (ventesAujourdhui || 0) + 1
+
     const { data: vente, error: erreurVente } = await supabase
       .from('sales')
       .insert([{
@@ -295,6 +304,7 @@ function Caisse() {
         boutique_id: boutiqueId,
         employe_id: employe?.id,
         client_id: idClientCredit,
+        numero_facture: numeroDuJour,
       }])
       .select()
       .single()
@@ -350,8 +360,8 @@ function Caisse() {
       }
     }
 
-    setDernierRecu({
-      numero: vente.id,
+        setDernierRecu({
+      numero: numeroDuJour,
       date: new Date(),
       vendeur: employe?.nom || '',
       client: nomClientRecu,

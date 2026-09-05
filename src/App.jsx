@@ -31,6 +31,8 @@ function App() {
     return localStorage.getItem('boutiqueActiveId') || null
   })
 
+  const [boutiqueInfo, setBoutiqueInfo] = useState(null)
+
     useEffect(() => {
     if (employeConnecte?.role === 'superadmin') {
       supabase.from('boutiques').select('*').then(({ data }) => {
@@ -61,6 +63,34 @@ function App() {
     }
     rafraichirEmploye()
   }, [])
+
+  useEffect(() => {
+    async function chargerBoutiqueInfo() {
+      if (!employeConnecte || employeConnecte.role === 'superadmin' || !employeConnecte.boutique_id) return
+      const { data } = await supabase
+        .from('boutiques')
+        .select('date_fin_essai, date_dernier_paiement')
+        .eq('id', employeConnecte.boutique_id)
+        .single()
+      if (data) setBoutiqueInfo(data)
+    }
+    chargerBoutiqueInfo()
+  }, [employeConnecte])
+
+  function messageAlerteAbonnement() {
+    if (!boutiqueInfo || !boutiqueInfo.date_fin_essai) return null
+    const maintenant = new Date()
+    const dateFin = new Date(boutiqueInfo.date_fin_essai)
+    const joursRestants = Math.ceil((dateFin - maintenant) / (1000 * 60 * 60 * 24))
+    if (joursRestants < 0 || joursRestants > 3) return null
+
+    const dejaPaye = !!boutiqueInfo.date_dernier_paiement
+    const echeance = joursRestants === 0 ? "aujourd'hui" : `dans ${joursRestants} jour(s)`
+
+    return dejaPaye
+      ? `⚠️ Votre abonnement Stockia se termine ${echeance}. Pensez à renouveler votre paiement pour continuer à utiliser l'application.`
+      : `⚠️ Votre essai gratuit Stockia se termine ${echeance}. Contactez-nous pour continuer à utiliser l'application.`
+  }
 
   function changerBoutiqueActive(id) {
     setBoutiqueActiveId(id)
@@ -109,6 +139,9 @@ const elementsMenu = elementsMenuComplet.filter((item) => {
   if (estProprietaire || estSuperAdmin) return true
   return !!employeConnecte[item.permission]
 })
+
+  const alerteAbonnement = messageAlerteAbonnement()
+
   return (
     <div className="app-layout">
       <button className="app-menu-toggle" onClick={() => setMenuOuvert(true)}>
@@ -175,6 +208,44 @@ const elementsMenu = elementsMenuComplet.filter((item) => {
       </nav>
 
       <div className="app-contenu">
+        {alerteAbonnement && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '10px',
+              backgroundColor: '#FFF4E5',
+              border: '1px solid #E4A400',
+              color: '#7A4E00',
+              borderRadius: '8px',
+              padding: '10px 16px',
+              marginBottom: '16px',
+              fontSize: '14px',
+              fontWeight: 600,
+            }}
+          >
+            <span>{alerteAbonnement}</span>
+            
+              href="https://wa.me/22655006657"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                backgroundColor: '#25D366',
+                color: 'white',
+                textDecoration: 'none',
+                fontSize: '13px',
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Renouveler sur WhatsApp
+            </a>
+          </div>
+        )}
         <AlerteStock pageActive={pageActive} />
         {pageActive === 'tableauDeBord' && <TableauDeBord setPageActive={setPageActive} />}
         {pageActive === 'caisse' && <Caisse />}
