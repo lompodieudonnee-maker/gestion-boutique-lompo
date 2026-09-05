@@ -265,6 +265,9 @@ function Inventaire() {
   return (
     <div className="stock-page">
            <h1>Inventaire</h1>
+      <p style={{ color: '#6B6357', fontSize: '13px', marginTop: '-8px', marginBottom: '16px' }}>
+        🔄 Relève tous les 3 jours : comptez à deux, l'employé qui termine son tour valide avant de partir.
+      </p>
 
       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '16px' }}>
         <button
