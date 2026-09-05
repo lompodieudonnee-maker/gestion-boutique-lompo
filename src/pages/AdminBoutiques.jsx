@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 function AdminBoutiques({ onDeconnexion }) {
   const [boutiques, setBoutiques] = useState([])
   const [chargement, setChargement] = useState(true)
+  const [dureeParBoutique, setDureeParBoutique] = useState({})
 
   useEffect(() => {
     chargerBoutiques()
@@ -17,6 +18,10 @@ function AdminBoutiques({ onDeconnexion }) {
       .order('id', { ascending: false })
     setBoutiques(data || [])
     setChargement(false)
+  }
+
+  function dureeChoisie(id) {
+    return dureeParBoutique[id] || 1
   }
 
   async function validerBoutique(id) {
@@ -43,14 +48,22 @@ function AdminBoutiques({ onDeconnexion }) {
 
   async function marquerPaiementRecu(id) {
     const maintenant = new Date()
+    const mois = dureeChoisie(id)
+    const finAbonnement = new Date(maintenant)
+    finAbonnement.setMonth(finAbonnement.getMonth() + mois)
+
     await supabase
       .from('boutiques')
-      .update({ date_dernier_paiement: maintenant.toISOString() })
+      .update({
+        date_dernier_paiement: maintenant.toISOString(),
+        date_fin_abonnement: finAbonnement.toISOString(),
+      })
       .eq('id', id)
     chargerBoutiques()
   }
 
   function dateFinCouverture(boutique) {
+    if (boutique.date_fin_abonnement) return new Date(boutique.date_fin_abonnement)
     if (!boutique.date_dernier_paiement) return null
     const dernierPaiement = new Date(boutique.date_dernier_paiement)
     const fin = new Date(dernierPaiement)
@@ -226,8 +239,26 @@ function AdminBoutiques({ onDeconnexion }) {
                   )}
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                   <span style={stylePastille(b.statut)}>{b.statut}</span>
+
+                  <select
+                    value={dureeChoisie(b.id)}
+                    onChange={(e) =>
+                      setDureeParBoutique({ ...dureeParBoutique, [b.id]: Number(e.target.value) })
+                    }
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      border: '1px solid #E6E0D6',
+                      fontFamily: 'Poppins, Arial, sans-serif',
+                    }}
+                  >
+                    <option value={1}>1 mois</option>
+                    <option value={3}>3 mois</option>
+                    <option value={6}>6 mois</option>
+                    <option value={12}>12 mois</option>
+                  </select>
 
                   <button
                     onClick={() => marquerPaiementRecu(b.id)}
@@ -241,7 +272,7 @@ function AdminBoutiques({ onDeconnexion }) {
                       cursor: 'pointer',
                     }}
                   >
-                    💰 Marquer paiement reçu
+                    💰 Marquer paiement reçu ({dureeChoisie(b.id)} mois)
                   </button>
 
                   {b.statut === 'en_attente' && (

@@ -70,7 +70,7 @@ function App() {
       if (!employeConnecte || employeConnecte.role === 'superadmin' || !employeConnecte.boutique_id) return
       const { data } = await supabase
         .from('boutiques')
-        .select('date_fin_essai, date_dernier_paiement')
+        .select('date_fin_essai, date_dernier_paiement, date_fin_abonnement')
         .eq('id', employeConnecte.boutique_id)
         .single()
       if (data) setBoutiqueInfo(data)
@@ -82,6 +82,7 @@ function App() {
     if (!boutiqueInfo) return null
     const maintenant = new Date()
 
+    // Cas 1 : encore en période d'essai gratuit
     if (boutiqueInfo.date_fin_essai) {
       const dateFin = new Date(boutiqueInfo.date_fin_essai)
       const joursRestants = Math.ceil((dateFin - maintenant) / (1000 * 60 * 60 * 24))
@@ -92,20 +93,27 @@ function App() {
       return null
     }
 
-    if (boutiqueInfo.date_dernier_paiement) {
-      const dateEcheance = new Date(boutiqueInfo.date_dernier_paiement)
+    // Cas 2 : boutique déjà validée/payante
+    // On utilise en priorité la date de fin d'abonnement exacte (si un paiement longue durée a été enregistré),
+    // sinon on retombe sur l'ancien calcul (dernier paiement + 30 jours)
+    let dateEcheance = null
+    if (boutiqueInfo.date_fin_abonnement) {
+      dateEcheance = new Date(boutiqueInfo.date_fin_abonnement)
+    } else if (boutiqueInfo.date_dernier_paiement) {
+      dateEcheance = new Date(boutiqueInfo.date_dernier_paiement)
       dateEcheance.setDate(dateEcheance.getDate() + 30)
-      const joursRestants = Math.ceil((dateEcheance - maintenant) / (1000 * 60 * 60 * 24))
-      if (joursRestants > 3) return null
-
-      if (joursRestants >= 0) {
-        const echeance = joursRestants === 0 ? "aujourd'hui" : `dans ${joursRestants} jour(s)`
-        return `⚠️ Votre abonnement Stockia se termine ${echeance}. Pensez à renouveler votre paiement pour continuer à utiliser l'application.`
-      }
-      return `⚠️ Votre abonnement Stockia est arrivé à échéance depuis ${Math.abs(joursRestants)} jour(s). Merci de renouveler votre paiement rapidement.`
     }
 
-    return null
+    if (!dateEcheance) return null
+
+    const joursRestants = Math.ceil((dateEcheance - maintenant) / (1000 * 60 * 60 * 24))
+    if (joursRestants > 3) return null
+
+    if (joursRestants >= 0) {
+      const echeance = joursRestants === 0 ? "aujourd'hui" : `dans ${joursRestants} jour(s)`
+      return `⚠️ Votre abonnement Stockia se termine ${echeance}. Pensez à renouveler votre paiement pour continuer à utiliser l'application.`
+    }
+    return `⚠️ Votre abonnement Stockia est arrivé à échéance depuis ${Math.abs(joursRestants)} jour(s). Merci de renouveler votre paiement rapidement.`
   }
 
   function changerBoutiqueActive(id) {
