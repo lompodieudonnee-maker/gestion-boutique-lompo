@@ -27,6 +27,9 @@ function Inventaire() {
   const [rechercheProduit, setRechercheProduit] = useState('');
 
   const [nomBoutique, setNomBoutique] = useState('');
+  const [whatsappResponsable, setWhatsappResponsable] = useState('');
+  const [whatsappInput, setWhatsappInput] = useState('');
+  const [enregistrementWhatsapp, setEnregistrementWhatsapp] = useState(false);
   const [panneauRapportOuvert, setPanneauRapportOuvert] = useState(false);
   const [dateDebutRapport, setDateDebutRapport] = useState('');
   const [dateFinRapport, setDateFinRapport] = useState('');
@@ -70,10 +73,55 @@ function Inventaire() {
   async function chargerNomBoutique() {
     const { data, error } = await supabase
       .from('boutiques')
-      .select('nom')
+      .select('nom, whatsapp_responsable')
       .eq('id', boutiqueId)
       .single()
-    if (!error && data) setNomBoutique(data.nom)
+    if (!error && data) {
+      setNomBoutique(data.nom)
+      setWhatsappResponsable(data.whatsapp_responsable || '')
+      setWhatsappInput(data.whatsapp_responsable || '')
+    }
+  }
+
+  async function enregistrerWhatsappResponsable() {
+    setEnregistrementWhatsapp(true)
+    const { error } = await supabase
+      .from('boutiques')
+      .update({ whatsapp_responsable: whatsappInput.trim() })
+      .eq('id', boutiqueId)
+    setEnregistrementWhatsapp(false)
+    if (error) {
+      alert('Erreur : ' + error.message)
+      return
+    }
+    setWhatsappResponsable(whatsappInput.trim())
+    alert('Numéro WhatsApp du responsable enregistré.')
+  }
+
+  function envoyerComptagePourValidation() {
+    const numero = whatsappResponsable.replace(/[^0-9]/g, '')
+    if (!numero) {
+      alert("Aucun numéro WhatsApp du responsable n'est configuré. Demandez au propriétaire de le renseigner en haut de la page Inventaire.")
+      return
+    }
+
+    const entrees = Object.entries(comptages).filter(([, val]) => val !== '' && val !== undefined)
+    if (entrees.length === 0) {
+      alert('Aucune quantité comptée à envoyer.')
+      return
+    }
+
+    let message = `Bonjour, voici le comptage physique du ${new Date().toLocaleDateString('fr-FR')} pour ${nomBoutique || 'la boutique'}, à valider dans Stockia :\n\n`
+    entrees.forEach(([produitId, valeurSaisie]) => {
+      const compte = parseInt(valeurSaisie, 10)
+      const actuel = quantiteActuelle(Number(produitId))
+      const ecart = compte - actuel
+      const signe = ecart > 0 ? `+${ecart}` : ecart
+      message += `- ${nomProduit(produitId)} : compté ${compte} (système ${actuel}, écart ${signe})\n`
+    })
+    message += `\nMerci de valider dans Stockia (Inventaire → Comptage physique).`
+
+    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(message)}`, '_blank')
   }
 
   function quantiteActuelle(idProduit) {
@@ -277,6 +325,39 @@ function Inventaire() {
       <p style={{ color: '#6B6357', fontSize: '13px', marginTop: '-8px', marginBottom: '16px' }}>
         🔄 Relève tous les 3 jours : comptez à deux, l'employé qui termine son tour valide avant de partir.
       </p>
+
+      {peutValiderComptage && (
+        <div
+          style={{
+            backgroundColor: '#EDF1F5',
+            border: '1px solid #D6DEE6',
+            borderRadius: '10px',
+            padding: '12px 16px',
+            marginBottom: '16px',
+            maxWidth: '500px',
+          }}
+        >
+          <label style={{ display: 'block', fontSize: '12px', color: '#37474F', marginBottom: '6px', fontWeight: 600 }}>
+            📲 Numéro WhatsApp du responsable (pour validation à distance d'un comptage)
+          </label>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <input
+              type="tel"
+              value={whatsappInput}
+              onChange={(e) => setWhatsappInput(e.target.value)}
+              placeholder="Ex : 22670000000"
+              style={{ padding: '7px 10px', border: '1px solid #E6E0D6', borderRadius: '6px', minWidth: '180px' }}
+            />
+            <button
+              onClick={enregistrerWhatsappResponsable}
+              disabled={enregistrementWhatsapp}
+              style={{ padding: '7px 14px', border: 'none', borderRadius: '6px', background: '#37474F', color: 'white', cursor: 'pointer' }}
+            >
+              {enregistrementWhatsapp ? '...' : 'Enregistrer'}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '16px' }}>
         <button
@@ -504,7 +585,27 @@ function Inventaire() {
                 maxWidth: '500px',
               }}
             >
-              🔒 Seul le propriétaire ou un employé avec la permission "Voir les finances" peut valider ce comptage. Notez les quantités comptées et faites-les valider par un responsable.
+              🔒 Seul le propriétaire ou un employé avec la permission "Voir les finances" peut valider ce comptage. Envoyez-le au responsable pour validation.
+              <div style={{ marginTop: '10px' }}>
+                <button
+                  onClick={envoyerComptagePourValidation}
+                  style={{
+                    padding: '10px 18px',
+                    backgroundColor: '#25D366',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontFamily: 'Poppins, Arial, sans-serif',
+                    fontWeight: 600,
+                  }}
+                >
+                  📲 Envoyer pour validation
+                </button>
+                <p style={{ fontSize: '12px', color: '#6B6357', marginTop: '6px', marginBottom: 0 }}>
+                  Astuce : cliquez aussi sur "Rapport PDF" en haut de la page, puis joignez le fichier téléchargé dans la conversation WhatsApp qui vient de s'ouvrir.
+                </p>
+              </div>
             </div>
           )}
         </>
