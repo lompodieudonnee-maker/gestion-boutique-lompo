@@ -14,7 +14,7 @@ function verifierSautDePage(doc, y, espaceNecessaire = 40) {
   return y
 }
 
-export function genererRapportVentesPDF({ boutiqueNom, dateDebut, dateFin, indicateurs, ventesDetail }) {
+export function genererRapportVentesPDF({ boutiqueNom, dateDebut, dateFin, indicateurs, produitsVendus, ventesDetail }) {
   const doc = new jsPDF()
 
   // En-tête
@@ -41,8 +41,31 @@ export function genererRapportVentesPDF({ boutiqueNom, dateDebut, dateFin, indic
     styles: { fontSize: 10 },
   })
 
-  // Tableau détaillé des ventes
-  const yApresIndicateurs = doc.lastAutoTable.finalY + 10
+  // Tableau des produits vendus, cumulés sur toute la période (un seul total par produit,
+  // même s'il a été vendu plusieurs fois dans la journée)
+  let yProduits = doc.lastAutoTable.finalY + 10
+  doc.setFontSize(13)
+  doc.setTextColor(43, 38, 32)
+  doc.text('Produits vendus (total période)', 14, yProduits)
+
+  if (!produitsVendus || produitsVendus.length === 0) {
+    doc.setFontSize(10)
+    doc.setTextColor(107, 99, 87)
+    doc.text('Aucune vente sur cette période.', 14, yProduits + 8)
+    yProduits += 16
+  } else {
+    autoTable(doc, {
+      startY: yProduits + 5,
+      head: [['Produit', 'Quantité totale', 'Montant total (FCFA)']],
+      body: produitsVendus.map((p) => [p.nom, String(p.quantite), formaterMontant(p.montant)]),
+      headStyles: { fillColor: [201, 130, 42] },
+      styles: { fontSize: 9 },
+    })
+    yProduits = doc.lastAutoTable.finalY + 12
+  }
+
+  // Tableau détaillé des ventes (une ligne par vente, avec l'heure)
+  const yApresIndicateurs = verifierSautDePage(doc, yProduits, 50)
   doc.setFontSize(13)
   doc.setTextColor(43, 38, 32)
   doc.text('Détail des ventes', 14, yApresIndicateurs)

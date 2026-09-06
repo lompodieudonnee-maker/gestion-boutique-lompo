@@ -117,10 +117,22 @@ function Caisse() {
 
       const { data: lignes, error: erreurLignes } = await supabase
         .from('sale_items')
-        .select('sale_id, nom_produit, quantite')
+        .select('sale_id, nom_produit, quantite, prix_unitaire')
         .in('sale_id', idsVentes)
 
       if (erreurLignes) throw new Error('Erreur détail ventes : ' + erreurLignes.message)
+
+      // Regroupement par produit (toutes ventes de la période confondues) : un employé qui vend
+      // le même produit plusieurs fois dans la journée voit un seul total, pas une ligne par vente.
+      const cumulParProduit = {}
+      ;(lignes || []).forEach((l) => {
+        if (!cumulParProduit[l.nom_produit]) {
+          cumulParProduit[l.nom_produit] = { nom: l.nom_produit, quantite: 0, montant: 0 }
+        }
+        cumulParProduit[l.nom_produit].quantite += Number(l.quantite || 0)
+        cumulParProduit[l.nom_produit].montant += Number(l.quantite || 0) * Number(l.prix_unitaire || 0)
+      })
+      const produitsVendus = Object.values(cumulParProduit).sort((a, b) => b.quantite - a.quantite)
 
       const { data: depensesPeriode } = await supabase
         .from('depenses')
@@ -172,6 +184,7 @@ function Caisse() {
         dateDebut: formaterDateAffichage(dateDebutRapport),
         dateFin: formaterDateAffichage(dateFinRapport),
         indicateurs,
+        produitsVendus,
         ventesDetail,
       })
     } catch (err) {
