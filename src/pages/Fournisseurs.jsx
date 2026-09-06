@@ -26,6 +26,9 @@ function Fournisseurs() {
   const [whatsappResponsable, setWhatsappResponsable] = useState('')
   const [nomBoutique, setNomBoutique] = useState('')
 
+  const [facturesEnAttente, setFacturesEnAttente] = useState([])
+  const [traitementFactureId, setTraitementFactureId] = useState(null)
+
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
   const boutiqueId = getBoutiqueId()
   const peutValider =
@@ -37,6 +40,7 @@ function Fournisseurs() {
     chargerFournisseurs()
     chargerProduits()
     chargerBoutique()
+    chargerFacturesEnAttente()
   }, [])
 
   async function chargerBoutique() {
@@ -77,6 +81,88 @@ function Fournisseurs() {
       .eq('boutique_id', boutiqueId)
       .order('created_at', { ascending: false })
     if (!error) setAchats(data)
+  }
+
+  // ============================================================
+  // FACTURES EN ATTENTE DE VALIDATION (soumises par un employé sans permission finances)
+  // ============================================================
+
+  async function chargerFacturesEnAttente() {
+    if (!boutiqueId) return
+    const { data, error } = await supabase
+      .from('factures_attente')
+      .select('*')
+      .eq('boutique_id', boutiqueId)
+      .eq('statut', 'en_attente')
+      .order('created_at', { ascending: false })
+    if (!error) setFacturesEnAttente(data || [])
+  }
+
+  async function approuverFactureEnAttente(facture) {
+    if (!peutValider) return
+    setTraitementFactureId(facture.id)
+
+    for (const ligne of facture.lignes) {
+      const { error } = await supabase.from('achats').insert([
+        {
+          fournisseur_id: facture.fournisseur_id,
+          description: ligne.description,
+          montant_total: ligne.montant,
+          montant_paye: 0,
+          statut: 'en cours',
+          boutique_id: facture.boutique_id,
+          produit_id: ligne.produit_id,
+          quantite: ligne.quantite,
+          reference_facture: facture.reference_facture,
+        },
+      ])
+
+      if (error) {
+        setTraitementFactureId(null)
+        alert('Erreur sur ' + (ligne.nom_produit || 'un produit') + ' : ' + error.message)
+        return
+      }
+
+      await supabase.from('stock_mouvements').insert({
+        boutique_id: facture.boutique_id,
+        produit_id: ligne.produit_id,
+        employe_id: employe?.id,
+        type_mouvement: 'Entrée',
+        quantite: ligne.quantite,
+        motif: `Achat fournisseur (facture approuvée, envoyée par ${facture.cree_par_nom || 'un employé'})`,
+      })
+    }
+
+    await supabase
+      .from('factures_attente')
+      .update({
+        statut: 'approuvee',
+        traite_par_employe_id: employe?.id,
+        traite_le: new Date().toISOString(),
+      })
+      .eq('id', facture.id)
+
+    setTraitementFactureId(null)
+    chargerFacturesEnAttente()
+    if (fournisseurSelectionne?.id === facture.fournisseur_id) {
+      chargerAchats(facture.fournisseur_id)
+    }
+    alert('Facture approuvée et enregistrée dans les achats.')
+  }
+
+  async function rejeterFactureEnAttente(facture) {
+    if (!confirm("Rejeter cette facture ? Elle ne sera pas enregistrée dans les achats.")) return
+    setTraitementFactureId(facture.id)
+    await supabase
+      .from('factures_attente')
+      .update({
+        statut: 'rejetee',
+        traite_par_employe_id: employe?.id,
+        traite_le: new Date().toISOString(),
+      })
+      .eq('id', facture.id)
+    setTraitementFactureId(null)
+    chargerFacturesEnAttente()
   }
 
   async function ajouterFournisseur() {
@@ -135,24 +221,52 @@ function Fournisseurs() {
     setPanierAchats(panierAchats.filter((_, i) => i !== index))
   }
 
-  function envoyerFacturePourValidation() {
-    const numero = whatsappResponsable.replace(/[^0-9]/g, '')
-    if (!numero) {
-      alert("Aucun numéro WhatsApp du responsable n'est configuré. Demandez au propriétaire de le renseigner en haut de la page Inventaire.")
-      return
-    }
+  async function envoyerFacturePourValidation() {
     if (panierAchats.length === 0) {
       alert('Ajoutez au moins un produit à la facture avant de l\'envoyer.')
       return
     }
 
-    let message = `Bonjour, voici une nouvelle facture fournisseur (${fournisseurSelectionne?.nom || ''}) pour ${nomBoutique || 'la boutique'}, à valider dans Stockia :\n\n`
-    panierAchats.forEach((ligne) => {
-      message += `- ${ligne.nom_produit} x${ligne.quantite} — ${ligne.montant.toLocaleString('fr-FR')} FCFA\n`
-    })
-    message += `\nTotal : ${montantTotalPanier.toLocaleString('fr-FR')} FCFA\n\nMerci de valider dans Stockia (Fournisseurs).`
+    const numero = whatsappResponsable.replace(/[^0-9]/g, '')
+    // Ouvre l'onglet WhatsApp tout de suite (au moment du clic) pour éviter que le navigateur le bloque ;
+    // on y mettra le message une fois la facture bien enregistrée.
+    const fenetreWhatsApp = numero ? window.open('', '_blank') : null
 
-    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(message)}`, '_blank')
+    setEnvoiFacture(true)
+    const referenceFacture = `FACT-${Date.now()}`
+
+    const { error } = await supabase.from('factures_attente').insert({
+      boutique_id: boutiqueId,
+      fournisseur_id: fournisseurSelectionne.id,
+      reference_facture: referenceFacture,
+      lignes: panierAchats,
+      montant_total: montantTotalPanier,
+      statut: 'en_attente',
+      cree_par_employe_id: employe?.id,
+      cree_par_nom: employe?.nom || '',
+    })
+
+    setEnvoiFacture(false)
+
+    if (error) {
+      fenetreWhatsApp?.close()
+      alert("Erreur lors de l'envoi pour validation : " + error.message)
+      return
+    }
+
+    if (numero && fenetreWhatsApp) {
+      let message = `Bonjour, voici une nouvelle facture fournisseur (${fournisseurSelectionne?.nom || ''}) pour ${nomBoutique || 'la boutique'}, à valider dans Stockia :\n\n`
+      panierAchats.forEach((ligne) => {
+        message += `- ${ligne.nom_produit} x${ligne.quantite} — ${ligne.montant.toLocaleString('fr-FR')} FCFA\n`
+      })
+      message += `\nTotal : ${montantTotalPanier.toLocaleString('fr-FR')} FCFA\n\nElle est déjà enregistrée dans Stockia : il suffit de l'approuver (Fournisseurs → Factures en attente de validation).`
+      fenetreWhatsApp.location.href = `https://wa.me/${numero}?text=${encodeURIComponent(message)}`
+    } else {
+      alert("Facture envoyée pour validation dans Stockia (Fournisseurs → Factures en attente de validation). Aucun numéro WhatsApp du responsable n'étant configuré, aucune notification WhatsApp n'a été envoyée.")
+    }
+
+    setPanierAchats([])
+    chargerFacturesEnAttente()
   }
 
   async function enregistrerFacture() {
@@ -309,6 +423,52 @@ function Fournisseurs() {
       <div style={{ flex: 1 }}>
         <h2>🚚 Fournisseurs</h2>
 
+        {peutValider && facturesEnAttente.length > 0 && (
+          <div style={{ ...styleCarteFormulaire, border: '1px solid #E3A055', backgroundColor: '#FDF6EC' }}>
+            <h4 style={{ marginTop: 0 }}>🔔 Factures en attente de validation ({facturesEnAttente.length})</h4>
+            {facturesEnAttente.map((facture) => (
+              <div
+                key={facture.id}
+                style={{
+                  padding: '12px',
+                  marginBottom: '10px',
+                  backgroundColor: 'white',
+                  border: '1px solid #E6E0D6',
+                  borderRadius: '8px',
+                }}
+              >
+                <div style={{ fontSize: '13px', color: '#6B6357', marginBottom: '6px' }}>
+                  {fournisseurs.find((f) => f.id === facture.fournisseur_id)?.nom || 'Fournisseur'} — envoyée par {facture.cree_par_nom || 'un employé'} le {new Date(facture.created_at).toLocaleString('fr-FR')}
+                </div>
+                <ul style={{ margin: '0 0 8px', paddingLeft: '18px', fontSize: '14px' }}>
+                  {(facture.lignes || []).map((l, i) => (
+                    <li key={i}>{l.nom_produit} x{l.quantite} — {Number(l.montant).toLocaleString('fr-FR')} FCFA</li>
+                  ))}
+                </ul>
+                <div style={{ marginBottom: '10px' }}>
+                  Total : <strong>{Number(facture.montant_total).toLocaleString('fr-FR')} FCFA</strong>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => approuverFactureEnAttente(facture)}
+                    disabled={traitementFactureId === facture.id}
+                    style={{ ...styleBouton, backgroundColor: '#2E7D32' }}
+                  >
+                    {traitementFactureId === facture.id ? '...' : '✅ Approuver'}
+                  </button>
+                  <button
+                    onClick={() => rejeterFactureEnAttente(facture)}
+                    disabled={traitementFactureId === facture.id}
+                    style={{ padding: '9px 16px', backgroundColor: 'white', color: '#B71C1C', border: '1px solid #E6E0D6', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}
+                  >
+                    ❌ Rejeter
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div style={styleCarteFormulaire}>
           <h4>Ajouter un fournisseur</h4>
           <input style={styleInput} placeholder="Nom" value={nom} onChange={(e) => setNom(e.target.value)} />
@@ -443,9 +603,13 @@ function Fournisseurs() {
                       }}
                     >
                       🔒 Seul le propriétaire ou un employé avec la permission "Voir les finances" peut valider cette facture.
+                      <p style={{ fontSize: '12px', margin: '6px 0 0' }}>
+                        En envoyant, la facture sera enregistrée dans Stockia en attente, et le responsable n'aura qu'à l'approuver (Fournisseurs → Factures en attente).
+                      </p>
                       <div style={{ marginTop: '10px' }}>
                         <button
                           onClick={envoyerFacturePourValidation}
+                          disabled={envoiFacture}
                           style={{
                             padding: '10px 18px',
                             backgroundColor: '#25D366',
@@ -457,7 +621,7 @@ function Fournisseurs() {
                             fontWeight: 600,
                           }}
                         >
-                          📲 Envoyer pour validation
+                          {envoiFacture ? 'Envoi...' : '📲 Envoyer pour validation'}
                         </button>
                       </div>
                     </div>
