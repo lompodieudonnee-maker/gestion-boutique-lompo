@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 import { supabase } from './lib/supabaseClient'
-import { pointageDuJour, enregistrerDepart, envoyerWhatsAppPointage } from './lib/pointage'
+import { pointageDuJour, enregistrerDepart, envoyerWhatsAppPointage, ouvrirFenetreWhatsApp } from './lib/pointage'
 import AlerteStock from './pages/AlerteStock'
 import Produits from './pages/Produits'
 import Stock from './pages/Stock'
@@ -128,6 +128,10 @@ function App() {
       const confirmer = confirm('Confirmez-vous votre départ de la boutique ? (Un message sera envoyé au responsable par WhatsApp)')
       if (!confirmer) return
 
+      // Ouvre l'onglet WhatsApp tout de suite (au moment du clic) pour éviter que le navigateur le bloque ;
+      // on y mettra le message une fois prêt.
+      const fenetreWhatsApp = ouvrirFenetreWhatsApp()
+
       const pointage = await pointageDuJour(employeConnecte.id)
       if (pointage && pointage.heure_arrivee && !pointage.heure_depart) {
         const { data: boutique } = await supabase
@@ -139,11 +143,15 @@ function App() {
         const { heure } = await enregistrerDepart(pointage.id)
         if (boutique) {
           const message = `🕐 *${employeConnecte.nom}* a quitté la boutique "${boutique.nom}" à ${heure}.`
-          const envoye = envoyerWhatsAppPointage(boutique.whatsapp_responsable, message)
+          const envoye = envoyerWhatsAppPointage(boutique.whatsapp_responsable, message, fenetreWhatsApp)
           if (!envoye) {
             alert("Votre départ a bien été enregistré, mais aucun numéro WhatsApp du responsable n'est configuré pour cette boutique. Demandez au propriétaire de le renseigner dans Inventaire ou Fournisseurs.")
           }
+        } else {
+          fenetreWhatsApp?.close()
         }
+      } else {
+        fenetreWhatsApp?.close()
       }
     }
 

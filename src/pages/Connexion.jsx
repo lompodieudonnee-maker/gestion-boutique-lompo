@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { pointageDuJour, enregistrerArrivee, envoyerWhatsAppPointage } from '../lib/pointage'
+import { pointageDuJour, enregistrerArrivee, envoyerWhatsAppPointage, ouvrirFenetreWhatsApp } from '../lib/pointage'
 import '../App.css'
 
 function Connexion({ onConnexionReussie }) {
@@ -141,12 +141,16 @@ function Connexion({ onConnexionReussie }) {
 
   async function confirmerArrivee() {
     if (!enAttentePointage) return
+    // Ouvre l'onglet WhatsApp tout de suite (au moment du clic) pour éviter que le navigateur le bloque ;
+    // on y mettra le message une fois prêt.
+    const fenetreWhatsApp = ouvrirFenetreWhatsApp()
+
     setEnvoiPointage(true)
     const { employeData, boutique } = enAttentePointage
 
     const { heure } = await enregistrerArrivee(employeData.id, employeData.boutique_id)
     const message = `🕐 *${employeData.nom}* est arrivé(e) à la boutique "${boutique.nom}" à ${heure}.`
-    const envoye = envoyerWhatsAppPointage(boutique.whatsapp_responsable, message)
+    const envoye = envoyerWhatsAppPointage(boutique.whatsapp_responsable, message, fenetreWhatsApp)
     if (!envoye) {
       alert("Votre arrivée a bien été enregistrée, mais aucun numéro WhatsApp du responsable n'est configuré pour cette boutique. Demandez au propriétaire de le renseigner dans Inventaire ou Fournisseurs.")
     }

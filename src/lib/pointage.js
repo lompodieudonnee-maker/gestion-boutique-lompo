@@ -52,10 +52,31 @@ export async function enregistrerDepart(pointageId) {
   return { data, error, heure: heureLisible(maintenant) }
 }
 
-// Ouvre WhatsApp avec un message pré-rempli vers le numéro du responsable (l'employé doit appuyer sur Envoyer)
-export function envoyerWhatsAppPointage(numeroBrut, message) {
+// À appeler IMMÉDIATEMENT au clic (avant tout await), pour ouvrir l'onglet pendant que le navigateur
+// considère encore l'action comme déclenchée par l'utilisateur (sinon le bloqueur de pop-up l'empêche).
+// On y mettra l'adresse WhatsApp une fois les informations prêtes (voir envoyerWhatsAppPointage).
+export function ouvrirFenetreWhatsApp() {
+  try {
+    return window.open('', '_blank')
+  } catch (e) {
+    return null
+  }
+}
+
+// Ouvre WhatsApp avec un message pré-rempli vers le numéro du responsable (l'employé doit appuyer sur Envoyer).
+// Si fenetreExistante est fournie (via ouvrirFenetreWhatsApp), on l'utilise pour éviter le bloqueur de pop-up ;
+// sinon on tente un window.open classique (peut être bloqué si appelé après un await).
+export function envoyerWhatsAppPointage(numeroBrut, message, fenetreExistante) {
   const numero = (numeroBrut || '').replace(/[^0-9]/g, '')
-  if (!numero) return false
-  window.open(`https://wa.me/${numero}?text=${encodeURIComponent(message)}`, '_blank')
+  if (!numero) {
+    if (fenetreExistante) fenetreExistante.close()
+    return false
+  }
+  const url = `https://wa.me/${numero}?text=${encodeURIComponent(message)}`
+  if (fenetreExistante) {
+    fenetreExistante.location.href = url
+  } else {
+    window.open(url, '_blank')
+  }
   return true
 }
