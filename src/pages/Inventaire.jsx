@@ -7,6 +7,10 @@ import { genererRapportInventairePDF } from '../lib/exportRapportPDF'
 function Inventaire() {
   const employeConnecte = JSON.parse(localStorage.getItem('employeConnecte'));
   const boutiqueId = getBoutiqueId()
+  const peutValiderComptage =
+    employeConnecte?.role === 'proprietaire' ||
+    employeConnecte?.role === 'superadmin' ||
+    employeConnecte?.voir_finances === true
   const [ongletActif, setOngletActif] = useState('valorisation');
   const [produits, setProduits] = useState([]);
   const [mouvements, setMouvements] = useState([]);
@@ -127,6 +131,11 @@ function Inventaire() {
   }
 
   async function validerComptage() {
+    if (!peutValiderComptage) {
+      alert('Seul le propriétaire ou un employé avec la permission "Voir les finances" peut valider un comptage.');
+      return;
+    }
+
     const entrees = Object.entries(comptages).filter(([, val]) => val !== '' && val !== undefined);
 
     if (entrees.length === 0) {
@@ -464,23 +473,40 @@ function Inventaire() {
               })}
             </tbody>
           </table>
-          <button
-            onClick={validerComptage}
-            disabled={envoi}
-            style={{
-              marginTop: '15px',
-              padding: '12px 24px',
-              background: '#C9822A',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontFamily: 'Poppins, sans-serif',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            {envoi ? 'Enregistrement...' : 'Valider le comptage'}
-          </button>
+          {peutValiderComptage ? (
+            <button
+              onClick={validerComptage}
+              disabled={envoi}
+              style={{
+                marginTop: '15px',
+                padding: '12px 24px',
+                background: '#C9822A',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontFamily: 'Poppins, sans-serif',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              {envoi ? 'Enregistrement...' : 'Valider le comptage'}
+            </button>
+          ) : (
+            <div
+              style={{
+                marginTop: '15px',
+                padding: '12px 16px',
+                background: '#F2F1EE',
+                border: '1px solid #E6E0D6',
+                borderRadius: '8px',
+                color: '#6B6357',
+                fontSize: '13px',
+                maxWidth: '500px',
+              }}
+            >
+              🔒 Seul le propriétaire ou un employé avec la permission "Voir les finances" peut valider ce comptage. Notez les quantités comptées et faites-les valider par un responsable.
+            </div>
+          )}
         </>
       )}
 
