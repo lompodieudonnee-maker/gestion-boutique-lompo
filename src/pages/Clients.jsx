@@ -11,6 +11,7 @@ function Clients() {
   const [clientSelectionne, setClientSelectionne] = useState(null)
   const [credits, setCredits] = useState([])
   const [paiementsParCredit, setPaiementsParCredit] = useState({})
+  const [employesListe, setEmployesListe] = useState([])
 
   const [nom, setNom] = useState('')
   const [telephone, setTelephone] = useState('')
@@ -21,6 +22,7 @@ function Clients() {
 
   useEffect(() => {
     chargerClients()
+    chargerEmployes()
   }, [])
 
   async function chargerClients() {
@@ -30,6 +32,20 @@ function Clients() {
       .eq('boutique_id', boutiqueId)
       .order('nom', { ascending: true })
     if (!error) setClients(data)
+  }
+
+  async function chargerEmployes() {
+    const { data } = await supabase
+      .from('employes')
+      .select('id, nom')
+      .eq('boutique_id', boutiqueId)
+    setEmployesListe(data || [])
+  }
+
+  function nomVendeur(employeId) {
+    if (!employeId) return null
+    const trouve = employesListe.find((e) => String(e.id) === String(employeId))
+    return trouve ? trouve.nom : null
   }
 
   async function chargerCredits(clientId) {
@@ -97,6 +113,7 @@ function Clients() {
     const { error } = await supabase.from('credits').insert(
       {
         client_id: clientSelectionne.id,
+        employe_id: employe?.id,
         montant_total: Number(montantCredit),
         montant_paye: 0,
         statut: 'en cours',
@@ -132,6 +149,7 @@ function Clients() {
     const { error: erreurHistorique } = await supabase.from('credit_paiements').insert({
       credit_id: credit.id,
       montant: Number(montantPaiement),
+      employe_id: employe?.id,
       boutique_id: boutiqueId,
     })
 
@@ -334,6 +352,9 @@ function Clients() {
                   <div>Déjà payé : {credit.montant_paye} FCFA</div>
                   <div>Reste à payer : <strong>{resteAPayer}</strong> FCFA</div>
                   <div>Statut : {credit.statut === 'solde' ? '✅ Soldé' : '⏳ En cours'}</div>
+                  <div style={{ color: '#6B6357', fontSize: '13px' }}>
+                    Vendu par : {nomVendeur(credit.employe_id) || '—'}
+                  </div>
 
                   {paiements.length > 0 && (
                     <div style={{ marginTop: '8px', fontSize: '13px', color: '#6B6357' }}>

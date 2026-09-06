@@ -365,7 +365,7 @@ function Caisse() {
        if (modePaiement === 'Crédit client' && idClientCredit) {
       const versementInitial = montantRecu !== '' ? parseFloat(montantRecu) : 0
       const statutCredit = versementInitial >= totalFinal ? 'solde' : 'en cours'
-      const { error: erreurCredit } = await supabase.from('credits').insert({ client_id: idClientCredit, sale_id: vente.id, montant_total: totalFinal, montant_paye: versementInitial, statut: statutCredit, boutique_id: boutiqueId, })
+      const { error: erreurCredit } = await supabase.from('credits').insert({ client_id: idClientCredit, sale_id: vente.id, employe_id: employe?.id, montant_total: totalFinal, montant_paye: versementInitial, statut: statutCredit, boutique_id: boutiqueId, })
       if (erreurCredit) {
         alert('La vente est enregistrée, mais le crédit n\'a pas pu être créé : ' + erreurCredit.message)
       }
