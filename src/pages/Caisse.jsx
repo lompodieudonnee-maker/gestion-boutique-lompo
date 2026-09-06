@@ -467,7 +467,7 @@ function Caisse() {
 
   return (
     <div style={{ padding: '20px', fontFamily: 'Poppins, Arial, sans-serif' }}>
-      <h1>💰 Vente</h1>
+      <h1>💰 Caisse</h1>
 
       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '15px' }}>
         <button

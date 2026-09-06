@@ -37,6 +37,9 @@ function GestionEmployes() {
   const [cycleDateDebut, setCycleDateDebut] = useState('')
   const [envoiCycle, setEnvoiCycle] = useState(false)
 
+  const [pointageOuvertId, setPointageOuvertId] = useState(null)
+  const [pointages, setPointages] = useState([])
+
   const [salaireOuvertId, setSalaireOuvertId] = useState(null)
   const [salaires, setSalaires] = useState([])
   const [nouveauSalaireMontant, setNouveauSalaireMontant] = useState('')
@@ -190,6 +193,7 @@ function GestionEmployes() {
       return
     }
     setSalaireOuvertId(null)
+    setPointageOuvertId(null)
     setPlanningOuvertId(employe.id)
     setCycleTravail(employe.cycle_jours_travail || '')
     setCycleRepos(employe.cycle_jours_repos || '')
@@ -331,6 +335,7 @@ function GestionEmployes() {
       return
     }
     setPlanningOuvertId(null)
+    setPointageOuvertId(null)
     setSalaireOuvertId(employe.id)
     await chargerSalaires(employe.id)
   }
@@ -391,6 +396,51 @@ function GestionEmployes() {
     if (!confirm("Supprimer ce paiement de salaire ? (Il restera cependant dans l'historique des Dépenses, à supprimer séparément si besoin)")) return
     await supabase.from('salaires').delete().eq('id', id)
     chargerSalaires(employeId)
+  }
+
+  // ============================================================
+  // POINTAGE (heures d'arrivée / départ)
+  // ============================================================
+
+  async function ouvrirPointage(employe) {
+    if (pointageOuvertId === employe.id) {
+      setPointageOuvertId(null)
+      return
+    }
+    setPlanningOuvertId(null)
+    setSalaireOuvertId(null)
+    setPointageOuvertId(employe.id)
+    await chargerPointages(employe.id)
+  }
+
+  async function chargerPointages(employeId) {
+    const { data } = await supabase
+      .from('pointages')
+      .select('*')
+      .eq('employe_id', employeId)
+      .order('date', { ascending: false })
+      .limit(31)
+    setPointages(data || [])
+  }
+
+  function heureCourte(iso) {
+    if (!iso) return '—'
+    return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  function dureeTravaillee(pointage) {
+    if (!pointage.heure_arrivee || !pointage.heure_depart) return '—'
+    const minutes = Math.round((new Date(pointage.heure_depart) - new Date(pointage.heure_arrivee)) / 60000)
+    if (minutes < 0) return '—'
+    const h = Math.floor(minutes / 60)
+    const m = minutes % 60
+    return `${h}h${m.toString().padStart(2, '0')}`
+  }
+
+  async function supprimerPointage(id, employeId) {
+    if (!confirm('Supprimer ce pointage ?')) return
+    await supabase.from('pointages').delete().eq('id', id)
+    chargerPointages(employeId)
   }
 
   if (chargement) return <p style={{ padding: '20px' }}>Chargement...</p>
@@ -466,6 +516,7 @@ function GestionEmployes() {
                   <th key={p.cle} style={{ padding: '10px', textAlign: 'center' }}>{p.label}</th>
                 ))}
                 <th style={{ padding: '10px', textAlign: 'center' }}>Planning</th>
+                <th style={{ padding: '10px', textAlign: 'center' }}>Pointage</th>
                 <th style={{ padding: '10px', textAlign: 'center' }}>Salaire</th>
                 <th style={{ padding: '10px' }}></th>
               </tr>
@@ -512,6 +563,13 @@ function GestionEmployes() {
                       )}
                     </td>
                     <td style={{ padding: '10px', textAlign: 'center' }}>
+                      {employe.role !== 'proprietaire' && (
+                        <button onClick={() => ouvrirPointage(employe)} style={{ padding: '5px 10px', cursor: 'pointer' }}>
+                          {pointageOuvertId === employe.id ? 'Fermer' : 'Voir'}
+                        </button>
+                      )}
+                    </td>
+                    <td style={{ padding: '10px', textAlign: 'center' }}>
                       <button onClick={() => ouvrirSalaire(employe)} style={{ padding: '5px 10px', cursor: 'pointer' }}>
                         {salaireOuvertId === employe.id ? 'Fermer' : 'Gérer'}
                       </button>
@@ -527,7 +585,7 @@ function GestionEmployes() {
 
                   {planningOuvertId === employe.id && (
                     <tr>
-                      <td colSpan={PERMISSIONS.length + 6} style={{ padding: '15px', backgroundColor: '#faf8f5', border: '1px solid #E6E0D6' }}>
+                      <td colSpan={PERMISSIONS.length + 7} style={{ padding: '15px', backgroundColor: '#faf8f5', border: '1px solid #E6E0D6' }}>
                         <strong>Planning fixe de {employe.nom}</strong>
                         <p style={{ fontSize: '13px', color: '#6B6357', margin: '4px 0 10px' }}>
                           Cochez les jours où {employe.nom} travaille. Si aucun jour n'est coché, il n'y a aucune restriction (il peut se connecter tous les jours).
@@ -654,9 +712,56 @@ function GestionEmployes() {
                     </tr>
                   )}
 
+                  {pointageOuvertId === employe.id && (
+                    <tr>
+                      <td colSpan={PERMISSIONS.length + 7} style={{ padding: '15px', backgroundColor: '#faf8f5', border: '1px solid #E6E0D6' }}>
+                        <strong>🕐 Pointage de {employe.nom}</strong>
+                        <p style={{ fontSize: '13px', color: '#6B6357', margin: '4px 0 15px' }}>
+                          Heures d'arrivée et de départ pointées par {employe.nom} depuis son téléphone (30 derniers jours). Un message WhatsApp est envoyé au responsable à chaque pointage.
+                        </p>
+
+                        {pointages.length === 0 ? (
+                          <p style={{ fontSize: '13px', color: '#6B6357' }}>Aucun pointage enregistré pour le moment.</p>
+                        ) : (
+                          <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                              <thead>
+                                <tr style={{ borderBottom: '1px solid #E6E0D6' }}>
+                                  <th style={{ padding: '6px', textAlign: 'left' }}>Date</th>
+                                  <th style={{ padding: '6px', textAlign: 'left' }}>Arrivée</th>
+                                  <th style={{ padding: '6px', textAlign: 'left' }}>Départ</th>
+                                  <th style={{ padding: '6px', textAlign: 'left' }}>Durée</th>
+                                  <th style={{ padding: '6px' }}></th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {pointages.map((p) => (
+                                  <tr key={p.id} style={{ borderBottom: '1px solid #eee' }}>
+                                    <td style={{ padding: '6px' }}>{new Date(p.date).toLocaleDateString('fr-FR')}</td>
+                                    <td style={{ padding: '6px' }}>{heureCourte(p.heure_arrivee)}</td>
+                                    <td style={{ padding: '6px' }}>{heureCourte(p.heure_depart)}</td>
+                                    <td style={{ padding: '6px' }}>{dureeTravaillee(p)}</td>
+                                    <td style={{ padding: '6px' }}>
+                                      <button
+                                        onClick={() => supprimerPointage(p.id, employe.id)}
+                                        style={{ color: 'red', border: 'none', background: 'none', cursor: 'pointer', fontSize: '12px' }}
+                                      >
+                                        (supprimer)
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+
                   {salaireOuvertId === employe.id && (
                     <tr>
-                      <td colSpan={PERMISSIONS.length + 6} style={{ padding: '15px', backgroundColor: '#faf8f5', border: '1px solid #E6E0D6' }}>
+                      <td colSpan={PERMISSIONS.length + 7} style={{ padding: '15px', backgroundColor: '#faf8f5', border: '1px solid #E6E0D6' }}>
                         <strong>💰 Salaire de {employe.nom}</strong>
                         <p style={{ fontSize: '13px', color: '#6B6357', margin: '4px 0 15px' }}>
                           Enregistrez un paiement de salaire. Il sera automatiquement compté dans vos Dépenses.

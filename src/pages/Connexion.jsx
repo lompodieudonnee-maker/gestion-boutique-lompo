@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { pointageDuJour, enregistrerArrivee, envoyerWhatsAppPointage } from '../lib/pointage'
 import '../App.css'
 
 function Connexion({ onConnexionReussie }) {
@@ -7,6 +8,9 @@ function Connexion({ onConnexionReussie }) {
   const [pin, setPin] = useState('')
   const [erreur, setErreur] = useState('')
   const [chargement, setChargement] = useState(false)
+
+  const [enAttentePointage, setEnAttentePointage] = useState(null) // { employeData, boutique }
+  const [envoiPointage, setEnvoiPointage] = useState(false)
 
   const [modeRecup, setModeRecup] = useState(false)
   const [emailRecup, setEmailRecup] = useState('')
@@ -97,7 +101,7 @@ function Connexion({ onConnexionReussie }) {
 
     const { data: boutique } = await supabase
       .from('boutiques')
-      .select('statut, date_fin_essai')
+      .select('nom, statut, date_fin_essai, whatsapp_responsable')
       .eq('id', data.boutique_id)
       .single()
 
@@ -121,10 +125,32 @@ function Connexion({ onConnexionReussie }) {
         setPin('')
         return
       }
+
+      // Employé (pas propriétaire) : on lui demande de confirmer son arrivée avant d'entrer dans l'appli,
+      // sauf s'il a déjà pointé son arrivée plus tôt dans la journée.
+      const pointageExistant = await pointageDuJour(data.id)
+      if (!pointageExistant || !pointageExistant.heure_arrivee) {
+        setEnAttentePointage({ employeData: data, boutique })
+        return
+      }
     }
 
     localStorage.setItem('employeConnecte', JSON.stringify(data))
     onConnexionReussie(data)
+  }
+
+  async function confirmerArrivee() {
+    if (!enAttentePointage) return
+    setEnvoiPointage(true)
+    const { employeData, boutique } = enAttentePointage
+
+    const { heure } = await enregistrerArrivee(employeData.id, employeData.boutique_id)
+    const message = `🕐 *${employeData.nom}* est arrivé(e) à la boutique "${boutique.nom}" à ${heure}.`
+    envoyerWhatsAppPointage(boutique.whatsapp_responsable, message)
+
+    setEnvoiPointage(false)
+    localStorage.setItem('employeConnecte', JSON.stringify(employeData))
+    onConnexionReussie(employeData)
   }
 
   async function handleRecuperation(e) {
@@ -212,6 +238,25 @@ function Connexion({ onConnexionReussie }) {
         <a href="/inscription" style={{ color: '#6B6357', marginTop: '1.5rem', fontSize: '14px' }}>
           Pas encore de compte ? Créer un compte
         </a>
+      </div>
+    )
+  }
+
+  if (enAttentePointage) {
+    return (
+      <div style={styleConteneur}>
+        <h1>GESTION BOUTIQUE</h1>
+        <p style={{ fontSize: '1.1rem' }}>Bonjour {enAttentePointage.employeData.nom} 👋</p>
+        <p style={{ fontSize: '14px', color: '#6B6357', maxWidth: '320px', textAlign: 'center', marginBottom: '1.5rem' }}>
+          Confirmez votre arrivée à la boutique pour continuer. Un message sera envoyé au responsable par WhatsApp.
+        </p>
+        <button
+          onClick={confirmerArrivee}
+          disabled={envoiPointage}
+          style={{ ...styleBoutonChoix, backgroundColor: '#C9822A', color: 'white', width: '280px' }}
+        >
+          {envoiPointage ? 'Enregistrement...' : '✅ Je suis arrivé(e)'}
+        </button>
       </div>
     )
   }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 import { supabase } from './lib/supabaseClient'
+import { pointageDuJour, enregistrerDepart, envoyerWhatsAppPointage } from './lib/pointage'
 import AlerteStock from './pages/AlerteStock'
 import Produits from './pages/Produits'
 import Stock from './pages/Stock'
@@ -122,7 +123,27 @@ function App() {
     window.location.reload()
   }
 
-  function handleDeconnexion() {
+  async function handleDeconnexion() {
+    if (employeConnecte?.role === 'employe') {
+      const confirmer = confirm('Confirmez-vous votre départ de la boutique ? (Un message sera envoyé au responsable par WhatsApp)')
+      if (!confirmer) return
+
+      const pointage = await pointageDuJour(employeConnecte.id)
+      if (pointage && pointage.heure_arrivee && !pointage.heure_depart) {
+        const { data: boutique } = await supabase
+          .from('boutiques')
+          .select('nom, whatsapp_responsable')
+          .eq('id', employeConnecte.boutique_id)
+          .single()
+
+        const { heure } = await enregistrerDepart(pointage.id)
+        if (boutique) {
+          const message = `🕐 *${employeConnecte.nom}* a quitté la boutique "${boutique.nom}" à ${heure}.`
+          envoyerWhatsAppPointage(boutique.whatsapp_responsable, message)
+        }
+      }
+    }
+
     localStorage.removeItem('employeConnecte')
     localStorage.removeItem('boutiqueActiveId')
     setEmployeConnecte(null)
@@ -147,7 +168,7 @@ function App() {
 
   const elementsMenuComplet = [
     { page: 'tableauDeBord', icone: '📊', label: 'Tableau de bord' },
-    { page: 'caisse', icone: '🛒', label: 'Vente' },
+    { page: 'caisse', icone: '🛒', label: 'Caisse' },
     { page: 'produits', icone: '📦', label: 'Produits' },
     { page: 'inventaire', icone: '📋', label: 'Inventaire' },
     { page: 'commande', icone: '📝', label: 'Commande' },
