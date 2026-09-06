@@ -77,11 +77,11 @@ export function genererRapportVentesPDF({ boutiqueNom, dateDebut, dateFin, indic
   } else {
     autoTable(doc, {
       startY: yApresIndicateurs + 5,
-      head: [['Date', 'Produits vendus', 'Mode de paiement', 'Montant (FCFA)']],
-      body: ventesDetail.map((v) => [v.date, v.produits, v.modePaiement, formaterMontant(v.montant)]),
+      head: [['Date', 'Produits vendus', 'Vendeur', 'Mode de paiement', 'Montant (FCFA)']],
+      body: ventesDetail.map((v) => [v.date, v.produits, v.vendeur || '—', v.modePaiement, formaterMontant(v.montant)]),
       headStyles: { fillColor: [55, 71, 79] },
       styles: { fontSize: 9 },
-      columnStyles: { 1: { cellWidth: 70 } },
+      columnStyles: { 1: { cellWidth: 60 } },
     })
   }
 

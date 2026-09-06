@@ -104,7 +104,7 @@ function Caisse() {
 
       const { data: ventes, error: erreurVentes } = await supabase
         .from('sales')
-        .select('id, created_at, mode_paiement, total')
+        .select('id, created_at, mode_paiement, total, employe_id')
         .eq('boutique_id', boutiqueId)
         .gte('created_at', debutComplet)
         .lte('created_at', finComplet)
@@ -112,6 +112,13 @@ function Caisse() {
 
       if (erreurVentes) throw new Error('Erreur ventes : ' + erreurVentes.message)
       if (!ventes || ventes.length === 0) throw new Error('Aucune vente trouvée sur cette période.')
+
+      const { data: employesData } = await supabase
+        .from('employes')
+        .select('id, nom')
+        .eq('boutique_id', boutiqueId)
+      const nomEmployeParId = {}
+      ;(employesData || []).forEach((e) => { nomEmployeParId[e.id] = e.nom })
 
       const idsVentes = ventes.map((v) => v.id)
 
@@ -176,6 +183,7 @@ function Caisse() {
           produits: produitsVente,
           modePaiement: v.mode_paiement,
           montant: Number(v.total || 0),
+          vendeur: nomEmployeParId[v.employe_id] || '—',
         }
       })
 
