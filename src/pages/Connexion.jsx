@@ -146,7 +146,10 @@ function Connexion({ onConnexionReussie }) {
 
     const { heure } = await enregistrerArrivee(employeData.id, employeData.boutique_id)
     const message = `🕐 *${employeData.nom}* est arrivé(e) à la boutique "${boutique.nom}" à ${heure}.`
-    envoyerWhatsAppPointage(boutique.whatsapp_responsable, message)
+    const envoye = envoyerWhatsAppPointage(boutique.whatsapp_responsable, message)
+    if (!envoye) {
+      alert("Votre arrivée a bien été enregistrée, mais aucun numéro WhatsApp du responsable n'est configuré pour cette boutique. Demandez au propriétaire de le renseigner dans Inventaire ou Fournisseurs.")
+    }
 
     setEnvoiPointage(false)
     localStorage.setItem('employeConnecte', JSON.stringify(employeData))

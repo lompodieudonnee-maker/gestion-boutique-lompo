@@ -139,7 +139,10 @@ function App() {
         const { heure } = await enregistrerDepart(pointage.id)
         if (boutique) {
           const message = `🕐 *${employeConnecte.nom}* a quitté la boutique "${boutique.nom}" à ${heure}.`
-          envoyerWhatsAppPointage(boutique.whatsapp_responsable, message)
+          const envoye = envoyerWhatsAppPointage(boutique.whatsapp_responsable, message)
+          if (!envoye) {
+            alert("Votre départ a bien été enregistré, mais aucun numéro WhatsApp du responsable n'est configuré pour cette boutique. Demandez au propriétaire de le renseigner dans Inventaire ou Fournisseurs.")
+          }
         }
       }
     }
