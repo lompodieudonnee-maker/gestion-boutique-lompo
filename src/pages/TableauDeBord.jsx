@@ -32,6 +32,12 @@ function TableauDeBord({ setPageActive }) {
   const [annulationEnCours, setAnnulationEnCours] = useState(null)
     const [nomBoutique, setNomBoutique] = useState('')
 
+  const [dateDebutClassement, setDateDebutClassement] = useState('')
+  const [dateFinClassement, setDateFinClassement] = useState('')
+  const [classement, setClassement] = useState([])
+  const [chargementClassement, setChargementClassement] = useState(false)
+  const [classementCharge, setClassementCharge] = useState(false)
+
     useEffect(() => {
     chargerNomBoutique()
   }, [])
@@ -320,6 +326,87 @@ function TableauDeBord({ setPageActive }) {
 
     chargerDonnees()
   }
+
+  // --- Classement des employés : bénéfice total et meilleur vendeur sur une période choisie ---
+  async function chargerClassement() {
+    setChargementClassement(true)
+
+    const { data: ventesBrutes } = await supabase
+      .from('sales')
+      .select('id, total, employe_id, created_at, annulee')
+      .eq('boutique_id', boutiqueId)
+
+    let ventes = (ventesBrutes || []).filter((v) => !v.annulee)
+
+    if (dateDebutClassement && dateFinClassement) {
+      const debut = new Date(dateDebutClassement)
+      debut.setHours(0, 0, 0, 0)
+      const fin = new Date(dateFinClassement)
+      fin.setHours(23, 59, 59, 999)
+      ventes = ventes.filter((v) => {
+        const d = new Date(v.created_at)
+        return d >= debut && d <= fin
+      })
+    }
+
+    const idsVentes = ventes.map((v) => v.id)
+    const employeParVente = {}
+    ventes.forEach((v) => { employeParVente[v.id] = v.employe_id })
+
+    const { data: itemsVentes } = await supabase
+      .from('sale_items')
+      .select('sale_id, product_id, quantite')
+      .eq('boutique_id', boutiqueId)
+    const itemsFiltres = (itemsVentes || []).filter((item) => idsVentes.includes(item.sale_id))
+
+    const { data: produitsCout } = await supabase
+      .from('products')
+      .select('id, prix_achat')
+      .eq('boutique_id', boutiqueId)
+    const prixAchatParProduit = {}
+    ;(produitsCout || []).forEach((p) => { prixAchatParProduit[p.id] = Number(p.prix_achat || 0) })
+
+    const statsParEmploye = {}
+    function initEmploye(id) {
+      if (!statsParEmploye[id]) {
+        statsParEmploye[id] = { nombreVentes: 0, ca: 0, cout: 0 }
+      }
+    }
+
+    ventes.forEach((v) => {
+      initEmploye(v.employe_id)
+      statsParEmploye[v.employe_id].nombreVentes += 1
+      statsParEmploye[v.employe_id].ca += Number(v.total || 0)
+    })
+
+    itemsFiltres.forEach((item) => {
+      const idEmp = employeParVente[item.sale_id]
+      if (idEmp == null) return
+      initEmploye(idEmp)
+      statsParEmploye[idEmp].cout += (prixAchatParProduit[item.product_id] || 0) * Number(item.quantite || 0)
+    })
+
+    const nomParEmploye = {}
+    employesListe.forEach((e) => { nomParEmploye[e.id] = e.nom })
+
+    const resultat = Object.keys(statsParEmploye).map((id) => {
+      const s = statsParEmploye[id]
+      return {
+        employeId: id,
+        nom: nomParEmploye[id] || `Employé #${id}`,
+        nombreVentes: s.nombreVentes,
+        ca: s.ca,
+        benefice: s.ca - s.cout,
+      }
+    })
+
+    resultat.sort((a, b) => b.ca - a.ca)
+
+    setClassement(resultat)
+    setChargementClassement(false)
+    setClassementCharge(true)
+  }
+
   const styleCarte = {
     flex: '1 1 200px',
     padding: '20px',
@@ -533,6 +620,102 @@ function TableauDeBord({ setPageActive }) {
           )}
         </div>
       </div>
+
+      {peutVoirFinances && (
+        <div
+          style={{
+            marginTop: '20px',
+            backgroundColor: 'white',
+            border: '1px solid #E6E0D6',
+            borderRadius: '10px',
+            padding: '18px',
+          }}
+        >
+          <h3 style={{ marginTop: 0, marginBottom: '4px' }}>🏆 Classement des employés</h3>
+          <p style={{ marginTop: 0, marginBottom: '14px', fontSize: '13px', color: '#6B6357' }}>
+            Choisissez une période (par exemple la semaine écoulée) pour voir le chiffre d'affaires et le bénéfice généré par chaque employé, et repérer le meilleur vendeur.
+          </p>
+
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: '16px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', color: '#6B6357', marginBottom: '4px' }}>Du</label>
+              <input
+                type="date"
+                value={dateDebutClassement}
+                onChange={(e) => setDateDebutClassement(e.target.value)}
+                style={{ padding: '7px 10px', border: '1px solid #E6E0D6', borderRadius: '6px', fontFamily: 'Poppins, Arial, sans-serif' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', color: '#6B6357', marginBottom: '4px' }}>Au</label>
+              <input
+                type="date"
+                value={dateFinClassement}
+                onChange={(e) => setDateFinClassement(e.target.value)}
+                style={{ padding: '7px 10px', border: '1px solid #E6E0D6', borderRadius: '6px', fontFamily: 'Poppins, Arial, sans-serif' }}
+              />
+            </div>
+            <button
+              onClick={chargerClassement}
+              disabled={chargementClassement}
+              style={{
+                padding: '9px 18px',
+                borderRadius: '8px',
+                border: 'none',
+                backgroundColor: '#C9822A',
+                color: 'white',
+                fontFamily: 'Poppins, Arial, sans-serif',
+                fontWeight: 600,
+                fontSize: '14px',
+                cursor: 'pointer',
+              }}
+            >
+              {chargementClassement ? 'Calcul...' : 'Voir le classement'}
+            </button>
+          </div>
+
+          {classementCharge && (
+            classement.length === 0 ? (
+              <p style={{ color: '#6B6357' }}>Aucune vente sur cette période.</p>
+            ) : (
+              <>
+                <table cellPadding="8" style={{ borderCollapse: 'collapse', width: '100%' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#F7F5F2' }}>
+                      <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Employé</th>
+                      <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Nb ventes</th>
+                      <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Chiffre d'affaires</th>
+                      <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Bénéfice généré</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {classement.map((c, index) => (
+                      <tr
+                        key={c.employeId}
+                        style={{
+                          borderTop: '1px solid #E6E0D6',
+                          backgroundColor: index === 0 ? '#FDF3E3' : 'white',
+                          fontWeight: index === 0 ? 700 : 400,
+                        }}
+                      >
+                        <td>{index === 0 ? '🏆 ' : ''}{c.nom}</td>
+                        <td>{c.nombreVentes}</td>
+                        <td>{c.ca.toLocaleString('fr-FR')} FCFA</td>
+                        <td style={{ color: c.benefice >= 0 ? '#2E7D32' : '#B71C1C' }}>
+                          {c.benefice.toLocaleString('fr-FR')} FCFA
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p style={{ marginTop: '10px', fontSize: '12px', color: '#6B6357' }}>
+                  🏆 = meilleur vendeur (chiffre d'affaires le plus élevé) sur la période choisie. Le bénéfice indiqué correspond au chiffre d'affaires moins le coût des produits vendus par cet employé (les dépenses générales de la boutique ne sont pas réparties par employé).
+                </p>
+              </>
+            )
+          )}
+        </div>
+      )}
 
       <div
         style={{
