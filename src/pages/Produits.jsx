@@ -25,6 +25,10 @@ function Produits() {
   const [modeEdition, setModeEdition] = useState(false)
   const [idEnEdition, setIdEnEdition] = useState(null)
 
+  const [produitsSelectionnes, setProduitsSelectionnes] = useState([])
+  const [impressionOuverte, setImpressionOuverte] = useState(false)
+  const [preparationEtiquettes, setPreparationEtiquettes] = useState(false)
+
   async function chargerProduits() {
     setChargement(true)
     const { data, error } = await supabase
@@ -193,6 +197,57 @@ function Produits() {
     }
   }
 
+  // ============================================================
+  // ÉTIQUETTES (QR code à imprimer et coller sur le produit)
+  // ============================================================
+
+  function basculerSelectionProduit(id) {
+    setProduitsSelectionnes((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    )
+  }
+
+  function basculerToutSelectionner(listeProduits) {
+    const idsVisibles = listeProduits.map((p) => p.id)
+    const touslsSelectionnes = idsVisibles.every((id) => produitsSelectionnes.includes(id))
+    if (touslsSelectionnes) {
+      setProduitsSelectionnes((prev) => prev.filter((id) => !idsVisibles.includes(id)))
+    } else {
+      setProduitsSelectionnes((prev) => Array.from(new Set([...prev, ...idsVisibles])))
+    }
+  }
+
+  async function ouvrirImpressionEtiquettes() {
+    if (produitsSelectionnes.length === 0) {
+      alert('Sélectionnez au moins un produit (case à cocher) pour imprimer ses étiquettes.')
+      return
+    }
+
+    setPreparationEtiquettes(true)
+
+    // Certains produits (créés avant cette fonctionnalité) peuvent ne pas avoir de code_produit :
+    // on leur en génère un et on l'enregistre avant impression, pour qu'aucun produit sélectionné
+    // ne se retrouve sans QR code sur son étiquette.
+    const produitsSansCode = produits.filter(
+      (p) => produitsSelectionnes.includes(p.id) && !p.code_produit
+    )
+
+    for (const p of produitsSansCode) {
+      await supabase.from('products').update({ code_produit: genererCodeAuto() }).eq('id', p.id)
+    }
+
+    if (produitsSansCode.length > 0) {
+      await chargerProduits()
+    }
+
+    setPreparationEtiquettes(false)
+    setImpressionOuverte(true)
+  }
+
+  function lancerImpression() {
+    window.print()
+  }
+
   const styleChamp = { marginBottom: '12px' }
   const styleInput = {
     padding: '9px 12px',
@@ -351,6 +406,29 @@ function Produits() {
         >
           {voirArchives ? '← Retour aux produits actifs' : '🗄️ Voir les archivés'}
         </button>
+
+        {!voirArchives && (
+          <button
+            type="button"
+            onClick={ouvrirImpressionEtiquettes}
+            disabled={preparationEtiquettes}
+            style={{
+              padding: '9px 16px',
+              backgroundColor: produitsSelectionnes.length > 0 ? '#C9822A' : '#E6E0D6',
+              color: produitsSelectionnes.length > 0 ? 'white' : '#6B6357',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: produitsSelectionnes.length > 0 ? 'pointer' : 'default',
+              fontFamily: 'Poppins, Arial, sans-serif',
+              fontWeight: 500,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {preparationEtiquettes
+              ? 'Préparation...'
+              : `🖨️ Imprimer les étiquettes${produitsSelectionnes.length > 0 ? ' (' + produitsSelectionnes.length + ')' : ''}`}
+          </button>
+        )}
       </div>
 
       <h2>{voirArchives ? 'Produits archivés' : 'Liste des produits'}</h2>
@@ -374,6 +452,16 @@ function Produits() {
         <table cellPadding="10" style={{ borderCollapse: 'collapse', width: '100%', backgroundColor: 'white', border: '1px solid #E6E0D6', borderRadius: '10px', overflow: 'hidden' }}>
           <thead>
             <tr style={{ backgroundColor: '#F7F5F2' }}>
+              {!voirArchives && (
+                <th style={{ textAlign: 'center', fontSize: '13px', color: '#6B6357' }}>
+                  <input
+                    type="checkbox"
+                    checked={produitsFiltres.length > 0 && produitsFiltres.every((p) => produitsSelectionnes.includes(p.id))}
+                    onChange={() => basculerToutSelectionner(produitsFiltres)}
+                    title="Tout sélectionner"
+                  />
+                </th>
+              )}
               <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Nom</th>
               <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Catégorie</th>
               <th style={{ textAlign: 'left', fontSize: '13px', color: '#6B6357' }}>Prix d'achat</th>
@@ -391,6 +479,15 @@ function Produits() {
               const qte = quantiteActuelle(p.id)
               return (
                 <tr key={p.id} style={{ backgroundColor: qte <= p.seuil_alerte ? '#FDECE1' : 'white', borderTop: '1px solid #E6E0D6' }}>
+                  {!voirArchives && (
+                    <td style={{ textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={produitsSelectionnes.includes(p.id)}
+                        onChange={() => basculerSelectionProduit(p.id)}
+                      />
+                    </td>
+                  )}
                   <td>{p.nom}</td>
                   <td>{p.categorie}</td>
                   <td>{p.prix_achat} FCFA</td>
@@ -429,6 +526,151 @@ function Produits() {
           onScan={gererCodeScanne}
           onClose={() => setScannerOuvert(false)}
         />
+      )}
+
+      {impressionOuverte && (
+        <>
+          <style>{`
+            @media print {
+              body * { visibility: hidden; }
+              #zone-etiquettes-impression, #zone-etiquettes-impression * { visibility: visible; }
+              #zone-etiquettes-impression {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                margin: 0;
+                padding: 10mm;
+              }
+              @page { margin: 8mm; }
+            }
+          `}</style>
+
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(43, 38, 32, 0.85)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000,
+              padding: '20px',
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                padding: '20px',
+                maxWidth: '820px',
+                width: '100%',
+                maxHeight: '90vh',
+                display: 'flex',
+                flexDirection: 'column',
+                fontFamily: 'Poppins, Arial, sans-serif',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                <h3 style={{ margin: 0 }}>
+                  🖨️ Étiquettes à imprimer ({produitsSelectionnes.length})
+                </h3>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    onClick={lancerImpression}
+                    style={{
+                      padding: '9px 16px',
+                      backgroundColor: '#C9822A',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontFamily: 'Poppins, Arial, sans-serif',
+                      fontWeight: 500,
+                    }}
+                  >
+                    Imprimer
+                  </button>
+                  <button
+                    onClick={() => setImpressionOuverte(false)}
+                    style={{
+                      padding: '9px 16px',
+                      border: '1px solid #E6E0D6',
+                      borderRadius: '8px',
+                      background: 'white',
+                      color: '#6B6357',
+                      cursor: 'pointer',
+                      fontFamily: 'Poppins, Arial, sans-serif',
+                      fontWeight: 500,
+                    }}
+                  >
+                    Fermer
+                  </button>
+                </div>
+              </div>
+
+              <p style={{ fontSize: '13px', color: '#6B6357', marginTop: 0, marginBottom: '14px' }}>
+                Aperçu avant impression. Chaque étiquette contient le QR code du produit, son nom et son prix de vente — à découper et coller sur le produit.
+              </p>
+
+              <div style={{ overflowY: 'auto', border: '1px solid #E6E0D6', borderRadius: '8px', padding: '10px' }}>
+                <div
+                  id="zone-etiquettes-impression"
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, 50mm)',
+                    gap: '3mm',
+                    justifyContent: 'start',
+                  }}
+                >
+                  {produits
+                    .filter((p) => produitsSelectionnes.includes(p.id))
+                    .map((p) => (
+                      <div
+                        key={p.id}
+                        style={{
+                          width: '50mm',
+                          height: '32mm',
+                          border: '1px dashed #B8AFA0',
+                          borderRadius: '2mm',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '2mm',
+                          padding: '2mm',
+                          boxSizing: 'border-box',
+                          breakInside: 'avoid',
+                        }}
+                      >
+                        {p.code_produit && <QRCodeSVG value={p.code_produit} size={64} />}
+                        <div style={{ overflow: 'hidden' }}>
+                          <div
+                            style={{
+                              fontSize: '10px',
+                              fontWeight: 700,
+                              color: '#2B2620',
+                              lineHeight: 1.2,
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            {p.nom}
+                          </div>
+                          <div style={{ fontSize: '11px', fontWeight: 700, color: '#B5691F', marginTop: '2mm' }}>
+                            {Number(p.prix_vente).toLocaleString('fr-FR')} FCFA
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   )
