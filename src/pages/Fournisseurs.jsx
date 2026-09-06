@@ -23,13 +23,33 @@ function Fournisseurs() {
   const [panierAchats, setPanierAchats] = useState([])
   const [envoiFacture, setEnvoiFacture] = useState(false)
 
+  const [whatsappResponsable, setWhatsappResponsable] = useState('')
+  const [nomBoutique, setNomBoutique] = useState('')
+
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
   const boutiqueId = getBoutiqueId()
+  const peutValider =
+    employe?.role === 'proprietaire' ||
+    employe?.role === 'superadmin' ||
+    employe?.voir_finances === true
 
   useEffect(() => {
     chargerFournisseurs()
     chargerProduits()
+    chargerBoutique()
   }, [])
+
+  async function chargerBoutique() {
+    const { data, error } = await supabase
+      .from('boutiques')
+      .select('nom, whatsapp_responsable')
+      .eq('id', boutiqueId)
+      .single()
+    if (!error && data) {
+      setNomBoutique(data.nom)
+      setWhatsappResponsable(data.whatsapp_responsable || '')
+    }
+  }
 
   async function chargerFournisseurs() {
     const { data, error } = await supabase
@@ -115,7 +135,32 @@ function Fournisseurs() {
     setPanierAchats(panierAchats.filter((_, i) => i !== index))
   }
 
+  function envoyerFacturePourValidation() {
+    const numero = whatsappResponsable.replace(/[^0-9]/g, '')
+    if (!numero) {
+      alert("Aucun numéro WhatsApp du responsable n'est configuré. Demandez au propriétaire de le renseigner en haut de la page Inventaire.")
+      return
+    }
+    if (panierAchats.length === 0) {
+      alert('Ajoutez au moins un produit à la facture avant de l\'envoyer.')
+      return
+    }
+
+    let message = `Bonjour, voici une nouvelle facture fournisseur (${fournisseurSelectionne?.nom || ''}) pour ${nomBoutique || 'la boutique'}, à valider dans Stockia :\n\n`
+    panierAchats.forEach((ligne) => {
+      message += `- ${ligne.nom_produit} x${ligne.quantite} — ${ligne.montant.toLocaleString('fr-FR')} FCFA\n`
+    })
+    message += `\nTotal : ${montantTotalPanier.toLocaleString('fr-FR')} FCFA\n\nMerci de valider dans Stockia (Fournisseurs).`
+
+    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(message)}`, '_blank')
+  }
+
   async function enregistrerFacture() {
+    if (!peutValider) {
+      alert('Seul le propriétaire ou un employé avec la permission "Voir les finances" peut valider une facture fournisseur.')
+      return
+    }
+
     if (panierAchats.length === 0) {
       alert('Ajoutez au moins un produit à la facture')
       return
@@ -378,13 +423,45 @@ function Fournisseurs() {
                   <p style={{ fontWeight: 600, marginBottom: '10px' }}>
                     Total de la facture : {montantTotalPanier.toLocaleString('fr-FR')} FCFA ({panierAchats.length} produit{panierAchats.length > 1 ? 's' : ''})
                   </p>
-                  <button
-                    onClick={enregistrerFacture}
-                    disabled={envoiFacture}
-                    style={{ ...styleBouton, backgroundColor: '#2E7D32' }}
-                  >
-                    {envoiFacture ? 'Enregistrement...' : '✅ Enregistrer la facture complète'}
-                  </button>
+                  {peutValider ? (
+                    <button
+                      onClick={enregistrerFacture}
+                      disabled={envoiFacture}
+                      style={{ ...styleBouton, backgroundColor: '#2E7D32' }}
+                    >
+                      {envoiFacture ? 'Enregistrement...' : '✅ Enregistrer la facture complète'}
+                    </button>
+                  ) : (
+                    <div
+                      style={{
+                        padding: '12px 16px',
+                        background: '#F2F1EE',
+                        border: '1px solid #E6E0D6',
+                        borderRadius: '8px',
+                        color: '#6B6357',
+                        fontSize: '13px',
+                      }}
+                    >
+                      🔒 Seul le propriétaire ou un employé avec la permission "Voir les finances" peut valider cette facture.
+                      <div style={{ marginTop: '10px' }}>
+                        <button
+                          onClick={envoyerFacturePourValidation}
+                          style={{
+                            padding: '10px 18px',
+                            backgroundColor: '#25D366',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            fontFamily: 'Poppins, Arial, sans-serif',
+                            fontWeight: 600,
+                          }}
+                        >
+                          📲 Envoyer pour validation
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

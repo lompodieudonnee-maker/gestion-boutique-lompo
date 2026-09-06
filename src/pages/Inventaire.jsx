@@ -216,7 +216,35 @@ function Inventaire() {
     alert('Comptage validé et écarts enregistrés.');
   }
 
+  function envoyerMouvementPourValidation() {
+    const numero = whatsappResponsable.replace(/[^0-9]/g, '')
+    if (!numero) {
+      alert("Aucun numéro WhatsApp du responsable n'est configuré. Demandez au propriétaire de le renseigner en haut de la page Inventaire.")
+      return
+    }
+    if (!produitMouvement) {
+      alert('Choisissez un produit');
+      return;
+    }
+    const qte = parseInt(quantiteMouvement, 10)
+    if (!qte || qte <= 0) {
+      alert('Entrez une quantité valide')
+      return
+    }
+    const nom = nomProduit(produitMouvement)
+    const motif = motifMouvement || (typeMouvement === 'Entrée' ? 'Entrée manuelle' : 'Sortie manuelle')
+    const message = `Bonjour, voici un mouvement de stock à valider pour ${nomBoutique || 'la boutique'} :\n\n` +
+      `${typeMouvement} — ${nom} x${qte}\nMotif : ${motif}\n\n` +
+      `Merci de valider dans Stockia (Inventaire → Entrée/Sortie).`
+    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(message)}`, '_blank')
+  }
+
   async function enregistrerMouvement() {
+    if (!peutValiderComptage) {
+      alert('Seul le propriétaire ou un employé avec la permission "Voir les finances" peut valider ce mouvement.');
+      return;
+    }
+
     if (!produitMouvement) {
       alert('Choisissez un produit');
       return;
@@ -711,23 +739,55 @@ function Inventaire() {
               style={{ width: '100%', padding: '9px', marginBottom: '15px', border: '1px solid #E6E0D6', borderRadius: '6px', boxSizing: 'border-box' }}
             />
 
-            <button
-              onClick={enregistrerMouvement}
-              disabled={envoiMouvement}
-              style={{
-                width: '100%',
-                padding: '12px',
-                background: '#C9822A',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                fontFamily: 'Poppins, sans-serif',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              {envoiMouvement ? 'Enregistrement...' : 'Enregistrer le mouvement'}
-            </button>
+            {peutValiderComptage ? (
+              <button
+                onClick={enregistrerMouvement}
+                disabled={envoiMouvement}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  background: '#C9822A',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontFamily: 'Poppins, sans-serif',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                {envoiMouvement ? 'Enregistrement...' : 'Enregistrer le mouvement'}
+              </button>
+            ) : (
+              <div
+                style={{
+                  padding: '12px 16px',
+                  background: '#F2F1EE',
+                  border: '1px solid #E6E0D6',
+                  borderRadius: '8px',
+                  color: '#6B6357',
+                  fontSize: '13px',
+                }}
+              >
+                🔒 Seul le propriétaire ou un employé avec la permission "Voir les finances" peut valider ce mouvement.
+                <div style={{ marginTop: '10px' }}>
+                  <button
+                    onClick={envoyerMouvementPourValidation}
+                    style={{
+                      padding: '10px 18px',
+                      backgroundColor: '#25D366',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontFamily: 'Poppins, Arial, sans-serif',
+                      fontWeight: 600,
+                    }}
+                  >
+                    📲 Envoyer pour validation
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <h3 style={{ marginBottom: '10px' }}>Historique des mouvements</h3>
