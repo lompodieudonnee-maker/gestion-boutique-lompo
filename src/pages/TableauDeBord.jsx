@@ -553,7 +553,7 @@ function TableauDeBord({ setPageActive }) {
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px' }}>
         <div style={{ ...styleCarte, backgroundColor: '#EAF5EC' }}>
-          <div style={styleTitre}>Chiffre d'affaires</div>
+          <div style={styleTitre}>Caisse</div>
           <div style={{ ...styleValeur, color: '#2E7D32' }}>{chiffreAffaires.toLocaleString('fr-FR')} FCFA</div>
         </div>
 
