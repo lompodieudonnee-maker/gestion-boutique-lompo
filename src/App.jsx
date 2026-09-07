@@ -262,7 +262,7 @@ function App() {
             </button>
           )}
 
-          {estSuperAdmin && (
+          {(estSuperAdmin || estProprietaire || employeConnecte.peut_gerer_prets) && (
             <button className={classeBouton('prets')} onClick={() => allerA('prets')}>
               <span>🔄</span>
               <span>Prêts entre boutiques</span>
@@ -293,7 +293,7 @@ function App() {
         {pageActive === 'depenses' && <Depenses />}
         {pageActive === 'employes' && (estProprietaire || estSuperAdmin) && <GestionEmployes />}
         {pageActive === 'adminBoutiques' && estSuperAdmin && <AdminBoutiques />}
-        {pageActive === 'prets' && estSuperAdmin && <PretsInterBoutiques />}
+        {pageActive === 'prets' && (estSuperAdmin || estProprietaire || employeConnecte.peut_gerer_prets) && <PretsInterBoutiques />}
       </div>
     </div>
   )

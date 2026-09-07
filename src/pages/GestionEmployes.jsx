@@ -6,6 +6,7 @@ const PERMISSIONS = [
   { cle: 'voir_finances', label: 'Voir les finances (bénéfices, dettes)' },
   { cle: 'peut_gerer_fournisseurs', label: 'Gérer les fournisseurs' },
   { cle: 'peut_gerer_stock', label: 'Gérer le Stock' },
+  { cle: 'peut_gerer_prets', label: 'Gérer les prêts entre boutiques' },
 ]
 
 const JOURS_SEMAINE = [

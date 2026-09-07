@@ -3,9 +3,15 @@ import { supabase } from '../lib/supabaseClient'
 
 function PretsInterBoutiques() {
   const employeConnecte = JSON.parse(localStorage.getItem('employeConnecte'))
+  const estSuperAdmin = employeConnecte?.role === 'superadmin'
+  const maBoutiqueId = employeConnecte?.boutique_id
 
   const [boutiques, setBoutiques] = useState([])
   const [chargement, setChargement] = useState(true)
+
+  // Pour un compte non-superadmin (propriétaire ou employé autorisé), sa boutique est toujours
+  // l'un des deux côtés du prêt — il choisit juste si elle prête ou si elle emprunte.
+  const [roleMaBoutique, setRoleMaBoutique] = useState('preteuse')
 
   const [boutiquePreteuseId, setBoutiquePreteuseId] = useState('')
   const [boutiqueEmprunteuseId, setBoutiqueEmprunteuseId] = useState('')
@@ -30,6 +36,17 @@ function PretsInterBoutiques() {
     chargerBoutiques()
     chargerPrets()
   }, [])
+
+  useEffect(() => {
+    if (estSuperAdmin || !maBoutiqueId) return
+    if (roleMaBoutique === 'preteuse') {
+      setBoutiquePreteuseId(String(maBoutiqueId))
+      setBoutiqueEmprunteuseId('')
+    } else {
+      setBoutiqueEmprunteuseId(String(maBoutiqueId))
+      setBoutiquePreteuseId('')
+    }
+  }, [roleMaBoutique, estSuperAdmin, maBoutiqueId])
 
   useEffect(() => {
     setProduitPreteurId('')
@@ -194,8 +211,13 @@ function PretsInterBoutiques() {
     p.nom.toLowerCase().includes(rechercheProduitEmprunteur.toLowerCase())
   )
 
-  const pretsEnCours = prets.filter((p) => p.statut === 'en_cours')
-  const pretsRembourses = prets.filter((p) => p.statut === 'rembourse')
+  const pretsVisibles = estSuperAdmin
+    ? prets
+    : prets.filter(
+        (p) => String(p.boutique_preteuse_id) === String(maBoutiqueId) || String(p.boutique_emprunteuse_id) === String(maBoutiqueId)
+      )
+  const pretsEnCours = pretsVisibles.filter((p) => p.statut === 'en_cours')
+  const pretsRembourses = pretsVisibles.filter((p) => p.statut === 'rembourse')
 
   const styleInput = {
     padding: '9px 12px',
@@ -241,16 +263,52 @@ function PretsInterBoutiques() {
       <div style={styleCarte}>
         <h4 style={{ marginTop: 0 }}>Nouveau prêt</h4>
 
+        {!estSuperAdmin && (
+          <div style={{ marginBottom: '16px' }}>
+            <strong>Le rôle de votre boutique ({nomBoutique(maBoutiqueId)}) dans ce prêt :</strong>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+              <button
+                onClick={() => setRoleMaBoutique('preteuse')}
+                style={{
+                  ...styleBouton,
+                  backgroundColor: roleMaBoutique === 'preteuse' ? '#C9822A' : 'white',
+                  color: roleMaBoutique === 'preteuse' ? 'white' : '#2B2620',
+                  border: '1px solid #E6E0D6',
+                }}
+              >
+                Elle prête un produit
+              </button>
+              <button
+                onClick={() => setRoleMaBoutique('emprunteuse')}
+                style={{
+                  ...styleBouton,
+                  backgroundColor: roleMaBoutique === 'emprunteuse' ? '#C9822A' : 'white',
+                  color: roleMaBoutique === 'emprunteuse' ? 'white' : '#2B2620',
+                  border: '1px solid #E6E0D6',
+                }}
+              >
+                Elle emprunte un produit
+              </button>
+            </div>
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: '260px' }}>
             <strong>Boutique prêteuse (qui donne)</strong>
             <div style={{ marginTop: '8px' }}>
-              <select style={styleInput} value={boutiquePreteuseId} onChange={(e) => setBoutiquePreteuseId(e.target.value)}>
-                <option value="">-- Choisir --</option>
-                {boutiques.map((b) => (
-                  <option key={b.id} value={b.id}>{b.nom}</option>
-                ))}
-              </select>
+              {!estSuperAdmin && roleMaBoutique === 'preteuse' ? (
+                <div style={{ ...styleInput, backgroundColor: '#F7F5F2' }}>{nomBoutique(boutiquePreteuseId)}</div>
+              ) : (
+                <select style={styleInput} value={boutiquePreteuseId} onChange={(e) => setBoutiquePreteuseId(e.target.value)}>
+                  <option value="">-- Choisir --</option>
+                  {boutiques
+                    .filter((b) => String(b.id) !== String(boutiqueEmprunteuseId))
+                    .map((b) => (
+                      <option key={b.id} value={b.id}>{b.nom}</option>
+                    ))}
+                </select>
+              )}
             </div>
             {boutiquePreteuseId && (
               <>
@@ -278,14 +336,18 @@ function PretsInterBoutiques() {
           <div style={{ flex: 1, minWidth: '260px' }}>
             <strong>Boutique emprunteuse (qui reçoit)</strong>
             <div style={{ marginTop: '8px' }}>
-              <select style={styleInput} value={boutiqueEmprunteuseId} onChange={(e) => setBoutiqueEmprunteuseId(e.target.value)}>
-                <option value="">-- Choisir --</option>
-                {boutiques
-                  .filter((b) => String(b.id) !== String(boutiquePreteuseId))
-                  .map((b) => (
-                    <option key={b.id} value={b.id}>{b.nom}</option>
-                  ))}
-              </select>
+              {!estSuperAdmin && roleMaBoutique === 'emprunteuse' ? (
+                <div style={{ ...styleInput, backgroundColor: '#F7F5F2' }}>{nomBoutique(boutiqueEmprunteuseId)}</div>
+              ) : (
+                <select style={styleInput} value={boutiqueEmprunteuseId} onChange={(e) => setBoutiqueEmprunteuseId(e.target.value)}>
+                  <option value="">-- Choisir --</option>
+                  {boutiques
+                    .filter((b) => String(b.id) !== String(boutiquePreteuseId))
+                    .map((b) => (
+                      <option key={b.id} value={b.id}>{b.nom}</option>
+                    ))}
+                </select>
+              )}
             </div>
             {boutiqueEmprunteuseId && (
               <>
