@@ -182,6 +182,24 @@ function Fournisseurs() {
     chargerFournisseurs()
   }
 
+  async function supprimerFournisseur(e, fournisseur) {
+    e.stopPropagation() // évite de sélectionner le fournisseur en cliquant sur "Supprimer"
+    if (!confirm(`Supprimer le fournisseur "${fournisseur.nom}" ? Cette action est définitive.`)) return
+
+    const { error } = await supabase.from('fournisseurs').delete().eq('id', fournisseur.id)
+
+    if (error) {
+      alert("Impossible de supprimer ce fournisseur : il a probablement des achats déjà enregistrés liés à son historique. " + error.message)
+      return
+    }
+
+    if (fournisseurSelectionne?.id === fournisseur.id) {
+      setFournisseurSelectionne(null)
+      setAchats([])
+    }
+    chargerFournisseurs()
+  }
+
   function selectionnerFournisseur(fournisseur) {
     setFournisseurSelectionne(fournisseur)
     setPanierAchats([])
@@ -491,12 +509,31 @@ function Fournisseurs() {
                 border: '1px solid #E6E0D6',
                 borderRadius: '8px',
                 cursor: 'pointer',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '10px',
               }}
             >
-              <strong>{fournisseur.nom}</strong>
-              {fournisseur.telephone && (
-                <div style={{ fontSize: '13px', opacity: 0.85 }}>{fournisseur.telephone}</div>
-              )}
+              <div>
+                <strong>{fournisseur.nom}</strong>
+                {fournisseur.telephone && (
+                  <div style={{ fontSize: '13px', opacity: 0.85 }}>{fournisseur.telephone}</div>
+                )}
+              </div>
+              <button
+                onClick={(e) => supprimerFournisseur(e, fournisseur)}
+                style={{
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  color: fournisseurSelectionne?.id === fournisseur.id ? 'white' : '#B71C1C',
+                  flexShrink: 0,
+                }}
+              >
+                Supprimer
+              </button>
             </div>
           ))}
         </div>
