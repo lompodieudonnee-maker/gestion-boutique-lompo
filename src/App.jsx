@@ -17,6 +17,7 @@ import GestionEmployes from './pages/GestionEmployes'
 import Connexion from './pages/Connexion'
 import Inscription from './pages/Inscription'
 import AdminBoutiques from './pages/AdminBoutiques'
+import PretsInterBoutiques from './pages/PretsInterBoutiques'
 
 function App() {
   const [pageActive, setPageActive] = useState('tableauDeBord')
@@ -260,6 +261,13 @@ function App() {
               <span>Gérer les boutiques</span>
             </button>
           )}
+
+          {estSuperAdmin && (
+            <button className={classeBouton('prets')} onClick={() => allerA('prets')}>
+              <span>🔄</span>
+              <span>Prêts entre boutiques</span>
+            </button>
+          )}
         </div>
       </nav>
 
@@ -285,6 +293,7 @@ function App() {
         {pageActive === 'depenses' && <Depenses />}
         {pageActive === 'employes' && (estProprietaire || estSuperAdmin) && <GestionEmployes />}
         {pageActive === 'adminBoutiques' && estSuperAdmin && <AdminBoutiques />}
+        {pageActive === 'prets' && estSuperAdmin && <PretsInterBoutiques />}
       </div>
     </div>
   )
