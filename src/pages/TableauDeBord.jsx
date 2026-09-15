@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { getBoutiqueId } from '../lib/boutique'
+import { fetchAllRows } from '../lib/fetchAll'
+import { chargerTousLesMouvementsStock } from '../lib/stockMouvements'
 
 function TableauDeBord({ setPageActive }) {
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
@@ -101,9 +103,17 @@ function TableauDeBord({ setPageActive }) {
     const idEmployeCible = peutVoirFinances ? (employePerso || employe?.id) : employe?.id
 
     // --- Ventes ---
-    let requeteVentes = supabase.from('sales').select('id, total, mode_paiement, created_at, employe_id, annulee, numero_facture').eq('boutique_id', boutiqueId)
-    if (filtrerParEmploye) requeteVentes = requeteVentes.eq('employe_id', idEmployeCible)
-    const { data: ventes } = await requeteVentes
+    // On charge TOUTES les ventes de la boutique (pagination) pour éviter que
+    // Supabase ne tronque silencieusement les résultats au-delà d'un certain
+    // nombre de lignes sur les boutiques avec beaucoup d'historique.
+    const { data: ventesTout } = await fetchAllRows(
+      'sales',
+      boutiqueId,
+      'id, total, mode_paiement, created_at, employe_id, annulee, numero_facture'
+    )
+    const ventes = filtrerParEmploye
+      ? (ventesTout || []).filter((v) => String(v.employe_id) === String(idEmployeCible))
+      : ventesTout
 
     const ventesToutesPeriode = filtrerParDate
       ? (ventes || []).filter((v) => new Date(v.created_at) >= debut && new Date(v.created_at) <= fin)
@@ -121,10 +131,11 @@ function TableauDeBord({ setPageActive }) {
     const dateParVente = {}
     ventesFiltrees.forEach((v) => { dateParVente[v.id] = v.created_at })
 
-    const { data: itemsVentes } = await supabase
-      .from('sale_items')
-      .select('nom_produit, quantite, sale_id, product_id')
-      .eq('boutique_id', boutiqueId)
+    const { data: itemsVentes } = await fetchAllRows(
+      'sale_items',
+      boutiqueId,
+      'nom_produit, quantite, sale_id, product_id'
+    )
 
     const itemsPeriode = (itemsVentes || [])
       .filter((item) => idsVentesFiltrees.includes(item.sale_id))
@@ -202,10 +213,7 @@ function TableauDeBord({ setPageActive }) {
       .from('products')
       .select('id, seuil_alerte')
       .eq('boutique_id', boutiqueId)
-    const { data: mouvementsStock } = await supabase
-      .from('stock_mouvements')
-      .select('produit_id, quantite')
-      .eq('boutique_id', boutiqueId)
+    const { data: mouvementsStock } = await chargerTousLesMouvementsStock(boutiqueId, 'produit_id, quantite')
 
     if (produits && mouvementsStock) {
       setNbProduits(produits.length)
@@ -331,10 +339,11 @@ function TableauDeBord({ setPageActive }) {
   async function chargerClassement() {
     setChargementClassement(true)
 
-    const { data: ventesBrutes } = await supabase
-      .from('sales')
-      .select('id, total, employe_id, created_at, annulee')
-      .eq('boutique_id', boutiqueId)
+    const { data: ventesBrutes } = await fetchAllRows(
+      'sales',
+      boutiqueId,
+      'id, total, employe_id, created_at, annulee'
+    )
 
     let ventes = (ventesBrutes || []).filter((v) => !v.annulee)
 
@@ -353,10 +362,11 @@ function TableauDeBord({ setPageActive }) {
     const employeParVente = {}
     ventes.forEach((v) => { employeParVente[v.id] = v.employe_id })
 
-    const { data: itemsVentes } = await supabase
-      .from('sale_items')
-      .select('sale_id, product_id, quantite')
-      .eq('boutique_id', boutiqueId)
+    const { data: itemsVentes } = await fetchAllRows(
+      'sale_items',
+      boutiqueId,
+      'sale_id, product_id, quantite'
+    )
     const itemsFiltres = (itemsVentes || []).filter((item) => idsVentes.includes(item.sale_id))
 
     const { data: produitsCout } = await supabase
