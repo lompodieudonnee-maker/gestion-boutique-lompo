@@ -26,7 +26,7 @@ function TableauDeBord({ setPageActive }) {
   const [nbFournisseurs, setNbFournisseurs] = useState(0)
   const [dettesFournisseurs, setDettesFournisseurs] = useState(0)
   const [employesListe, setEmployesListe] = useState([])
-  const [employePerso, setEmployePerso] = useState(employe?.id || '')
+  const [employePerso, setEmployePerso] = useState('')
   const [dateDebutPerso, setDateDebutPerso] = useState('')
   const [dateFinPerso, setDateFinPerso] = useState('')
   const [dernieresVentes, setDernieresVentes] = useState([])
@@ -99,8 +99,11 @@ function TableauDeBord({ setPageActive }) {
     // ne voit jamais que ses propres ventes, quel que soit l'onglet de période choisi.
     // Le propriétaire et le super-admin continuent de voir toutes les ventes de la boutique.
     const estEmployeSansFinances = employe?.role === 'employe' && !employe?.voir_finances
-    const filtrerParEmploye = ongletPeriode === 'perso' || estEmployeSansFinances
-    const idEmployeCible = peutVoirFinances ? (employePerso || employe?.id) : employe?.id
+    // Dans l'onglet "Perso", on ne filtre par employé que si un employé précis
+    // a été choisi dans la liste ("Tous les employés" = pas de filtre, on voit
+    // le total de la boutique sur la période choisie).
+    const filtrerParEmploye = (ongletPeriode === 'perso' && !!employePerso) || estEmployeSansFinances
+    const idEmployeCible = peutVoirFinances ? employePerso : employe?.id
 
     // --- Ventes ---
     // On charge TOUTES les ventes de la boutique (pagination) pour éviter que
@@ -514,6 +517,7 @@ function TableauDeBord({ setPageActive }) {
                 onChange={(e) => setEmployePerso(e.target.value)}
                 style={{ padding: '8px 10px', border: '1px solid #E6E0D6', borderRadius: '6px', fontFamily: 'Poppins, Arial, sans-serif' }}
               >
+                <option value="">Tous les employés</option>
                 {employesListe.map((e) => (
                   <option key={e.id} value={e.id}>{e.nom}</option>
                 ))}
