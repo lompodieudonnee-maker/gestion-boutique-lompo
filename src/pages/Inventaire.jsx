@@ -7,10 +7,12 @@ import { genererRapportInventairePDF } from '../lib/exportRapportPDF'
 function Inventaire() {
   const employeConnecte = JSON.parse(localStorage.getItem('employeConnecte'));
   const boutiqueId = getBoutiqueId()
-  const peutValiderComptage =
+  const peutValiderMouvement =
     employeConnecte?.role === 'proprietaire' ||
     employeConnecte?.role === 'superadmin' ||
     employeConnecte?.voir_finances === true
+  // Validation restreinte du comptage physique désactivée : tout employé peut valider directement.
+  const peutValiderComptage = true
   const [ongletActif, setOngletActif] = useState('valorisation');
   const [produits, setProduits] = useState([]);
   const [mouvements, setMouvements] = useState([]);
@@ -240,7 +242,7 @@ function Inventaire() {
   }
 
   async function enregistrerMouvement() {
-    if (!peutValiderComptage) {
+    if (!peutValiderMouvement) {
       alert('Seul le propriétaire ou un employé avec la permission "Voir les finances" peut valider ce mouvement.');
       return;
     }
@@ -354,7 +356,7 @@ function Inventaire() {
         🔄 Relève tous les 3 jours : comptez à deux, l'employé qui termine son tour valide avant de partir.
       </p>
 
-      {peutValiderComptage && (
+      {peutValiderMouvement && (
         <div
           style={{
             backgroundColor: '#EDF1F5',
@@ -739,7 +741,7 @@ function Inventaire() {
               style={{ width: '100%', padding: '9px', marginBottom: '15px', border: '1px solid #E6E0D6', borderRadius: '6px', boxSizing: 'border-box' }}
             />
 
-            {peutValiderComptage ? (
+            {peutValiderMouvement ? (
               <button
                 onClick={enregistrerMouvement}
                 disabled={envoiMouvement}
