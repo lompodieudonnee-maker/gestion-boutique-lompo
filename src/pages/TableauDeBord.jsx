@@ -101,7 +101,7 @@ function TableauDeBord({ setPageActive }) {
     const idEmployeCible = peutVoirFinances ? (employePerso || employe?.id) : employe?.id
 
     // --- Ventes ---
-    let requeteVentes = supabase.from('sales').select('id, total, mode_paiement, created_at, employe_id, annulee').eq('boutique_id', boutiqueId)
+    let requeteVentes = supabase.from('sales').select('id, total, mode_paiement, created_at, employe_id, annulee, numero_facture').eq('boutique_id', boutiqueId)
     if (filtrerParEmploye) requeteVentes = requeteVentes.eq('employe_id', idEmployeCible)
     const { data: ventes } = await requeteVentes
 
@@ -289,7 +289,7 @@ function TableauDeBord({ setPageActive }) {
           employe_id: employe?.id,
           type_mouvement: 'Entrée',
           quantite: article.quantite,
-          motif: `Annulation vente n°${vente.id}`,
+          motif: `Annulation vente n°${vente.numero_facture ?? vente.id}`,
         })
         console.log('Résultat insertion mouvement :', erreurMouvement)
       } else {
@@ -744,7 +744,7 @@ function TableauDeBord({ setPageActive }) {
             <tbody>
               {ventesRecentes.map((vente) => (
                 <tr key={vente.id} style={{ borderTop: '1px solid #E6E0D6', backgroundColor: vente.annulee ? '#F7F5F2' : 'white' }}>
-                  <td>{vente.id}</td>
+                  <td>{vente.numero_facture ?? vente.id}</td>
                   <td>
                     {new Date(vente.created_at).toLocaleDateString('fr-FR')}{' '}
                     {new Date(vente.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}

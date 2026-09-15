@@ -358,7 +358,7 @@ function Caisse() {
         employe_id: employe?.id,
         type_mouvement: 'Sortie',
         quantite: -item.quantiteVente,
-        motif: `Vente n°${vente.id}`,
+        motif: `Vente n°${numeroDuJour}`,
       })
     }
 
