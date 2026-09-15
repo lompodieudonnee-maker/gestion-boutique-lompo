@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import './Stock.css';
 import { getBoutiqueId } from '../lib/boutique'
+import { chargerTousLesMouvementsStock } from '../lib/stockMouvements'
 
 function Stock() {
   const employeConnecte = JSON.parse(localStorage.getItem('employeConnecte'));
@@ -34,11 +35,7 @@ function Stock() {
       .select('id, nom, seuil_alerte')
       .eq('boutique_id', boutiqueId);
 
-    const { data: mouvementsData } = await supabase
-      .from('stock_mouvements')
-      .select('*, products(nom), employes(nom)')
-      .eq('boutique_id', boutiqueId)
-      .order('created_at', { ascending: false });
+    const { data: mouvementsData } = await chargerTousLesMouvementsStock(boutiqueId, '*, products(nom), employes(nom)');
 
     setProduits(produitsData || []);
     setMouvements(mouvementsData || []);
@@ -164,7 +161,9 @@ function Stock() {
             </tr>
           </thead>
           <tbody>
-            {mouvements.map((m) => (
+            {mouvements
+              .filter((m) => (m.products?.nom || '').toLowerCase().includes(rechercheProduit.toLowerCase()))
+              .map((m) => (
               <tr key={m.id}>
                 <td>{new Date(m.created_at).toLocaleString('fr-FR')}</td>
                 <td>{m.products?.nom}</td>

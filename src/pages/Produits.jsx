@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { getBoutiqueId } from '../lib/boutique'
+import { chargerTousLesMouvementsStock } from '../lib/stockMouvements'
 import { QRCodeSVG } from "qrcode.react";
 import ScannerProduit from "../ScannerProduit";
 
@@ -37,10 +38,7 @@ function Produits() {
       .eq('boutique_id', boutiqueId)
       .order('created_at', { ascending: false })
 
-    const { data: mouvementsData } = await supabase
-      .from('stock_mouvements')
-      .select('produit_id, quantite')
-      .eq('boutique_id', boutiqueId)
+    const { data: mouvementsData } = await chargerTousLesMouvementsStock(boutiqueId, 'produit_id, quantite')
 
     if (error) {
       console.error('Erreur de chargement :', error)

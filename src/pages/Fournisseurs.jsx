@@ -31,10 +31,8 @@ function Fournisseurs() {
 
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
   const boutiqueId = getBoutiqueId()
-  const peutValider =
-    employe?.role === 'proprietaire' ||
-    employe?.role === 'superadmin' ||
-    employe?.voir_finances === true
+  // Validation restreinte désactivée : tout employé peut valider un achat fournisseur directement.
+  const peutValider = true
 
   useEffect(() => {
     chargerFournisseurs()
@@ -123,14 +121,23 @@ function Fournisseurs() {
         return
       }
 
-      await supabase.from('stock_mouvements').insert({
+      const { error: erreurStock } = await supabase.from('stock_mouvements').insert({
         boutique_id: facture.boutique_id,
         produit_id: ligne.produit_id,
-        employe_id: employe?.id,
+        employe_id: employe?.id || null,
         type_mouvement: 'Entrée',
         quantite: ligne.quantite,
         motif: `Achat fournisseur (facture approuvée, envoyée par ${facture.cree_par_nom || 'un employé'})`,
       })
+
+      if (erreurStock) {
+        setTraitementFactureId(null)
+        alert(
+          `Attention : le produit "${ligne.nom_produit || ''}" a été ajouté aux achats, mais le STOCK n'a PAS été mis à jour (erreur : ${erreurStock.message}).\n\nLa facture reste "en attente" pour ne pas fausser le suivi — merci de me signaler ce message exact avant d'approuver à nouveau.`
+        )
+        chargerFacturesEnAttente()
+        return
+      }
     }
 
     await supabase
@@ -301,6 +308,8 @@ function Fournisseurs() {
     setEnvoiFacture(true)
 
     const referenceFacture = `FACT-${Date.now()}`
+    const nombreLignesDepart = panierAchats.length
+    let lignesRestantes = [...panierAchats]
 
     for (const ligne of panierAchats) {
       const { error } = await supabase.from('achats').insert([
@@ -319,24 +328,39 @@ function Fournisseurs() {
 
       if (error) {
         setEnvoiFacture(false)
+        setPanierAchats(lignesRestantes)
         alert('Erreur sur ' + ligne.nom_produit + ' : ' + error.message)
         return
       }
 
-      await supabase.from('stock_mouvements').insert({
+      const { error: erreurStock } = await supabase.from('stock_mouvements').insert({
         boutique_id: boutiqueId,
         produit_id: ligne.produit_id,
-        employe_id: employe?.id,
+        employe_id: employe?.id || null,
         type_mouvement: 'Entrée',
         quantite: ligne.quantite,
         motif: `Achat fournisseur : ${fournisseurSelectionne.nom}`,
       })
+
+      // Cette ligne est enregistrée dans les achats quoi qu'il arrive : on ne la remet pas
+      // dans le panier pour éviter de la comptabiliser deux fois si l'employé réessaie.
+      lignesRestantes = lignesRestantes.filter((l) => l !== ligne)
+
+      if (erreurStock) {
+        setEnvoiFacture(false)
+        setPanierAchats(lignesRestantes)
+        alert(
+          `La ligne "${ligne.nom_produit}" a bien été ajoutée à la facture, mais le STOCK n'a PAS été mis à jour à cause d'une erreur : ${erreurStock.message}\n\nMerci de signaler ce message exact avant de continuer.`
+        )
+        chargerAchats(fournisseurSelectionne.id)
+        return
+      }
     }
 
     setEnvoiFacture(false)
     setPanierAchats([])
     chargerAchats(fournisseurSelectionne.id)
-    alert(`Facture enregistrée : ${panierAchats.length} produit(s) ajouté(s).`)
+    alert(`Facture enregistrée : ${nombreLignesDepart} produit(s) ajouté(s), et le stock a été mis à jour.`)
   }
 
   // --- Regroupement des achats en factures ---
