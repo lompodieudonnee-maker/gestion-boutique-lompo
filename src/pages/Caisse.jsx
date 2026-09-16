@@ -3,6 +3,7 @@ import ScannerProduit from "../ScannerProduit";
 import { supabase } from '../lib/supabaseClient'
 import { getBoutiqueId } from '../lib/boutique'
 import { genererRapportVentesPDF } from "../lib/exportRapportPDF"
+import { chargerTousLesMouvementsStock } from '../lib/stockMouvements'
 
 function Caisse() {
   const employe = JSON.parse(localStorage.getItem('employeConnecte'))
@@ -41,10 +42,7 @@ function Caisse() {
       .eq('actif', true)
     if (!error) setProduits(data)
 
-    const { data: mouvementsData } = await supabase
-      .from('stock_mouvements')
-      .select('produit_id, quantite')
-      .eq('boutique_id', boutiqueId)
+    const { data: mouvementsData } = await chargerTousLesMouvementsStock(boutiqueId, 'produit_id, quantite')
     setMouvements(mouvementsData || [])
   }
 
