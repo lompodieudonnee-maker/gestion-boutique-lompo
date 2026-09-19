@@ -15,7 +15,7 @@ function AlerteStock({ pageActive }) {
   async function chargerAlertes() {
     const { data: produits, error: erreurProduits } = await supabase
       .from('products')
-      .select('id, nom, seuil_alerte')
+      .select('id, nom, seuil_alerte, actif')
       .eq('boutique_id', boutiqueId)
 
     const { data: mouvements, error: erreurMouvements } = await supabase
@@ -32,6 +32,7 @@ function AlerteStock({ pageActive }) {
     }
 
     const enAlerte = produits
+      .filter((p) => p.actif !== false)
       .map((p) => ({ nom: p.nom, quantite: quantiteActuelle(p.id), seuil_alerte: p.seuil_alerte }))
       .filter((p) => p.seuil_alerte != null && p.quantite <= Number(p.seuil_alerte))
 

@@ -32,7 +32,7 @@ function Stock() {
 
     const { data: produitsData } = await supabase
       .from('products')
-      .select('id, nom, seuil_alerte')
+      .select('id, nom, seuil_alerte, actif')
       .eq('boutique_id', boutiqueId);
 
     const { data: mouvementsData } = await chargerTousLesMouvementsStock(boutiqueId, '*, products(nom), employes(nom)');
@@ -49,7 +49,9 @@ function Stock() {
       .reduce((total, m) => total + Number(m.quantite), 0);
   }
 
+  // Les produits archivés ne sont plus affichés dans le stock
   const produitsFiltres = produits.filter((p) =>
+    p.actif !== false &&
     p.nom.toLowerCase().includes(rechercheProduit.toLowerCase())
   );
 

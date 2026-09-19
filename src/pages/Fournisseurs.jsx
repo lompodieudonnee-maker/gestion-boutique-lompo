@@ -65,7 +65,7 @@ function Fournisseurs() {
   async function chargerProduits() {
     const { data, error } = await supabase
       .from('products')
-      .select('id, nom')
+      .select('id, nom, actif')
       .eq('boutique_id', boutiqueId)
       .order('nom', { ascending: true })
     if (!error) setProduits(data)
@@ -423,7 +423,9 @@ function Fournisseurs() {
     chargerAchats(fournisseurSelectionne.id)
   }
 
+  // Les produits archivés ne sont plus proposés pour un nouvel achat
   const produitsFiltres = produits.filter((p) =>
+    p.actif !== false &&
     p.nom.toLowerCase().includes(rechercheProduit.toLowerCase())
   )
 

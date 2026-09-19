@@ -52,7 +52,7 @@ function Inventaire() {
 
     const { data: produitsData } = await supabase
       .from('products')
-      .select('id, nom, prix_achat, seuil_alerte')
+      .select('id, nom, prix_achat, seuil_alerte, actif')
       .eq('boutique_id', boutiqueId);
 
     const { data: mouvementsData } = await supabase
@@ -142,11 +142,15 @@ function Inventaire() {
     const e = employes.find((e) => String(e.id) === String(idEmploye));
     return e ? e.nom : 'Employé supprimé';
   }
-   const produitsFiltres = produits.filter((p) =>
-    p.nom.toLowerCase().includes(rechercheProduit.toLowerCase())
-  ); 
+  // Les produits archivés sont exclus des listes et de la valeur du stock
+  // (on garde `produits` complet pour retrouver le nom des anciens mouvements)
+  const produitsActifs = produits.filter((p) => p.actif !== false);
 
-  const valeurTotale = produits.reduce(
+  const produitsFiltres = produitsActifs.filter((p) =>
+    p.nom.toLowerCase().includes(rechercheProduit.toLowerCase())
+  );
+
+  const valeurTotale = produitsActifs.reduce(
     (total, p) => total + quantiteActuelle(p.id) * Number(p.prix_achat || 0),
     0
   );
@@ -299,7 +303,7 @@ function Inventaire() {
       const fin = new Date(dateFinRapport)
       fin.setHours(23, 59, 59, 999)
 
-      const produitsValorisation = produits.map((p) => {
+      const produitsValorisation = produitsActifs.map((p) => {
         const qte = quantiteActuelle(p.id)
         return {
           nom: p.nom,
