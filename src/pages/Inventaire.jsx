@@ -230,9 +230,12 @@ function Inventaire() {
 
       const dateTexte = new Date().toLocaleDateString('fr-FR');
       const corrections = [];
+      const resume = [];
       for (const [produitId, valeurSaisie] of entrees) {
-        const ecart = Number(valeurSaisie) - (stockParProduit[String(produitId)] || 0);
+        const systeme = stockParProduit[String(produitId)] || 0;
+        const ecart = Number(valeurSaisie) - systeme;
         if (ecart !== 0) {
+          resume.push({ nom: nomProduit(produitId), systeme, compte: Number(valeurSaisie), ecart, produitId });
           corrections.push({
             boutique_id: boutiqueId,
             produit_id: Number.isNaN(Number(produitId)) ? produitId : Number(produitId),
@@ -248,6 +251,29 @@ function Inventaire() {
         setComptages({});
         alert('Comptage validé : aucun écart, le stock correspond exactement.');
         return;
+      }
+
+      // Récapitulatif à confirmer AVANT d'enregistrer (évite les fautes de frappe : 29 au lieu de 2, etc.)
+      const MAX_LIGNES = 15;
+      const lignes = resume.slice(0, MAX_LIGNES).map((r) => {
+        const signe = r.ecart > 0 ? `+${r.ecart}` : `${r.ecart}`;
+        const alerte = Math.abs(r.ecart) >= 10 ? '  ⚠️ GROS ÉCART' : '';
+        return `• ${r.nom} : système ${r.systeme} → compté ${r.compte} (${signe})${alerte}`;
+      });
+      if (resume.length > MAX_LIGNES) {
+        lignes.push(`… et ${resume.length - MAX_LIGNES} autre(s) produit(s)`);
+      }
+      const valeurPertes = resume
+        .filter((r) => r.ecart < 0)
+        .reduce((t, r) => t + Math.abs(r.ecart) * prixAchatProduit(r.produitId), 0);
+      const messageConfirmation =
+        `Vérifiez avant d'enregistrer — ${resume.length} produit(s) avec écart :\n\n` +
+        lignes.join('\n') +
+        (valeurPertes > 0 ? `\n\nValeur des pertes : ${valeurPertes.toLocaleString('fr-FR')} FCFA` : '') +
+        `\n\nCes chiffres sont-ils bien ceux que vous avez comptés ?\nOK = enregistrer  |  Annuler = revenir corriger`;
+
+      if (!window.confirm(messageConfirmation)) {
+        return; // Rien n'est enregistré, les quantités saisies restent à l'écran
       }
 
       // Un seul envoi pour tous les écarts : tout est enregistré, ou rien (pas de comptage à moitié sauvegardé)
