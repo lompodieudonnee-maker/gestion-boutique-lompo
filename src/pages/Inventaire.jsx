@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import './Stock.css';
 import { getBoutiqueId } from '../lib/boutique'
+import { chargerTousLesMouvementsStock } from '../lib/stockMouvements'
 import { genererRapportInventairePDF } from '../lib/exportRapportPDF'
 
 function Inventaire() {
@@ -55,11 +56,13 @@ function Inventaire() {
       .select('id, nom, prix_achat, seuil_alerte, actif')
       .eq('boutique_id', boutiqueId);
 
-    const { data: mouvementsData } = await supabase
-      .from('stock_mouvements')
-      .select('id, produit_id, quantite, type_mouvement, motif, created_at, employe_id')
-      .eq('boutique_id', boutiqueId)
-      .order('created_at', { ascending: false });
+    // Lecture paginée : une boutique active a des milliers de mouvements, et une
+    // requête simple ne renvoie que les 1000 premiers (sans erreur) — ce qui
+    // faussait la "Quantité système" et donc les écarts du comptage.
+    const { data: mouvementsData } = await chargerTousLesMouvementsStock(
+      boutiqueId,
+      'id, produit_id, quantite, type_mouvement, motif, created_at, employe_id'
+    );
 
     const { data: employesData } = await supabase
       .from('employes')
@@ -197,29 +200,74 @@ function Inventaire() {
       return;
     }
 
-    setEnvoi(true);
-
+    // Vérifie que chaque quantité saisie est un nombre entier valide (>= 0)
     for (const [produitId, valeurSaisie] of entrees) {
-      const compte = parseInt(valeurSaisie, 10);
-      const actuel = quantiteActuelle(Number(produitId));
-      const ecart = compte - actuel;
-
-      if (ecart !== 0) {
-        await supabase.from('stock_mouvements').insert({
-          boutique_id: boutiqueId,
-          produit_id: produitId,
-          employe_id: employeConnecte?.id,
-          type_mouvement: 'Correction inventaire',
-          quantite: ecart,
-          motif: `Comptage physique du ${new Date().toLocaleDateString('fr-FR')}`,
-        });
+      const compte = Number(valeurSaisie);
+      if (!Number.isInteger(compte) || compte < 0) {
+        alert(`Quantité invalide pour « ${nomProduit(produitId)} » : « ${valeurSaisie} ». Entrez un nombre entier (0 ou plus).`);
+        return;
       }
     }
 
-    setEnvoi(false);
-    setComptages({});
-    chargerDonnees();
-    alert('Comptage validé et écarts enregistrés.');
+    setEnvoi(true);
+
+    try {
+      // On relit le stock réel juste avant d'enregistrer (données fraîches et complètes)
+      const { data: mvts, error: erreurLecture } = await chargerTousLesMouvementsStock(
+        boutiqueId,
+        'produit_id, quantite'
+      );
+      if (erreurLecture) {
+        alert('Impossible de relire le stock : ' + erreurLecture.message + '\nRien n\'a été enregistré. Vérifiez la connexion internet et réessayez.');
+        return;
+      }
+
+      const stockParProduit = {};
+      for (const m of mvts) {
+        const cle = String(m.produit_id);
+        stockParProduit[cle] = (stockParProduit[cle] || 0) + Number(m.quantite);
+      }
+
+      const dateTexte = new Date().toLocaleDateString('fr-FR');
+      const corrections = [];
+      for (const [produitId, valeurSaisie] of entrees) {
+        const ecart = Number(valeurSaisie) - (stockParProduit[String(produitId)] || 0);
+        if (ecart !== 0) {
+          corrections.push({
+            boutique_id: boutiqueId,
+            produit_id: Number.isNaN(Number(produitId)) ? produitId : Number(produitId),
+            employe_id: employeConnecte?.id ?? null,
+            type_mouvement: 'Correction inventaire',
+            quantite: ecart,
+            motif: `Comptage physique du ${dateTexte}`,
+          });
+        }
+      }
+
+      if (corrections.length === 0) {
+        setComptages({});
+        alert('Comptage validé : aucun écart, le stock correspond exactement.');
+        return;
+      }
+
+      // Un seul envoi pour tous les écarts : tout est enregistré, ou rien (pas de comptage à moitié sauvegardé)
+      const { error } = await supabase.from('stock_mouvements').insert(corrections);
+
+      if (error) {
+        console.error('Erreur enregistrement comptage :', error);
+        alert('Le comptage n\'a PAS été enregistré.\nMessage : ' + error.message + '\nNotez ce message et envoyez-le à l\'administrateur.');
+        return;
+      }
+
+      setComptages({});
+      await chargerDonnees();
+      alert(`Comptage validé : ${corrections.length} écart(s) enregistré(s).`);
+    } catch (e) {
+      console.error(e);
+      alert('Erreur inattendue : ' + (e?.message || e) + '\nLe comptage n\'a peut-être pas été enregistré. Vérifiez la connexion internet et réessayez.');
+    } finally {
+      setEnvoi(false);
+    }
   }
 
   function envoyerMouvementPourValidation() {

@@ -18,6 +18,7 @@ export async function chargerTousLesMouvementsStock(boutiqueId, colonnes = '*') 
       .select(colonnes)
       .eq('boutique_id', boutiqueId)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .range(depart, depart + TAILLE_PAGE - 1)
 
     if (error) {
