@@ -21,6 +21,8 @@ function Inventaire() {
   const [chargement, setChargement] = useState(true);
   const [comptages, setComptages] = useState({});
   const [envoi, setEnvoi] = useState(false);
+  // Récapitulatif à confirmer avant d'enregistrer un comptage (null = fenêtre fermée)
+  const [confirmationComptage, setConfirmationComptage] = useState(null);
 
   const [produitMouvement, setProduitMouvement] = useState('');
   const [quantiteMouvement, setQuantiteMouvement] = useState('');
@@ -235,7 +237,7 @@ function Inventaire() {
         const systeme = stockParProduit[String(produitId)] || 0;
         const ecart = Number(valeurSaisie) - systeme;
         if (ecart !== 0) {
-          resume.push({ nom: nomProduit(produitId), systeme, compte: Number(valeurSaisie), ecart, produitId });
+          resume.push({ produitId, nom: nomProduit(produitId), systeme, compte: Number(valeurSaisie), ecart });
           corrections.push({
             boutique_id: boutiqueId,
             produit_id: Number.isNaN(Number(produitId)) ? produitId : Number(produitId),
@@ -253,43 +255,43 @@ function Inventaire() {
         return;
       }
 
-      // Récapitulatif à confirmer AVANT d'enregistrer (évite les fautes de frappe : 29 au lieu de 2, etc.)
-      const MAX_LIGNES = 15;
-      const lignes = resume.slice(0, MAX_LIGNES).map((r) => {
-        const signe = r.ecart > 0 ? `+${r.ecart}` : `${r.ecart}`;
-        const alerte = Math.abs(r.ecart) >= 10 ? '  ⚠️ GROS ÉCART' : '';
-        return `• ${r.nom} : système ${r.systeme} → compté ${r.compte} (${signe})${alerte}`;
-      });
-      if (resume.length > MAX_LIGNES) {
-        lignes.push(`… et ${resume.length - MAX_LIGNES} autre(s) produit(s)`);
-      }
+      // On n'enregistre pas tout de suite : on affiche d'abord un récapitulatif
+      // (fenêtre intégrée à l'application, plus fiable qu'un confirm() du navigateur)
       const valeurPertes = resume
         .filter((r) => r.ecart < 0)
         .reduce((t, r) => t + Math.abs(r.ecart) * prixAchatProduit(r.produitId), 0);
-      const messageConfirmation =
-        `Vérifiez avant d'enregistrer — ${resume.length} produit(s) avec écart :\n\n` +
-        lignes.join('\n') +
-        (valeurPertes > 0 ? `\n\nValeur des pertes : ${valeurPertes.toLocaleString('fr-FR')} FCFA` : '') +
-        `\n\nCes chiffres sont-ils bien ceux que vous avez comptés ?\nOK = enregistrer  |  Annuler = revenir corriger`;
+      setConfirmationComptage({ resume, corrections, valeurPertes });
+    } catch (e) {
+      console.error(e);
+      alert('Erreur inattendue : ' + (e?.message || e) + '\nRien n\'a été enregistré. Vérifiez la connexion internet et réessayez.');
+    } finally {
+      setEnvoi(false);
+    }
+  }
 
-      if (!window.confirm(messageConfirmation)) {
-        return; // Rien n'est enregistré, les quantités saisies restent à l'écran
-      }
+  async function enregistrerCorrectionsConfirmees() {
+    if (!confirmationComptage) return;
+    const { corrections } = confirmationComptage;
+    setEnvoi(true);
 
+    try {
       // Un seul envoi pour tous les écarts : tout est enregistré, ou rien (pas de comptage à moitié sauvegardé)
       const { error } = await supabase.from('stock_mouvements').insert(corrections);
 
       if (error) {
         console.error('Erreur enregistrement comptage :', error);
+        setConfirmationComptage(null);
         alert('Le comptage n\'a PAS été enregistré.\nMessage : ' + error.message + '\nNotez ce message et envoyez-le à l\'administrateur.');
         return;
       }
 
+      setConfirmationComptage(null);
       setComptages({});
       await chargerDonnees();
       alert(`Comptage validé : ${corrections.length} écart(s) enregistré(s).`);
     } catch (e) {
       console.error(e);
+      setConfirmationComptage(null);
       alert('Erreur inattendue : ' + (e?.message || e) + '\nLe comptage n\'a peut-être pas été enregistré. Vérifiez la connexion internet et réessayez.');
     } finally {
       setEnvoi(false);
@@ -429,6 +431,116 @@ function Inventaire() {
 
   return (
     <div className="stock-page">
+      {confirmationComptage && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.55)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+          }}
+        >
+          <div
+            style={{
+              background: 'white',
+              borderRadius: '14px',
+              width: '100%',
+              maxWidth: '520px',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
+              fontFamily: 'Poppins, sans-serif',
+            }}
+          >
+            <div style={{ padding: '18px 20px 10px' }}>
+              <h3 style={{ margin: 0, color: '#6B4A1F' }}>Vérifiez avant d'enregistrer</h3>
+              <p style={{ margin: '6px 0 0', fontSize: '13px', color: '#6B6357' }}>
+                {confirmationComptage.resume.length} produit(s) avec écart. Ces chiffres sont-ils bien ceux que vous avez comptés ?
+              </p>
+            </div>
+
+            <div style={{ overflowY: 'auto', padding: '0 20px', flex: 1 }}>
+              {confirmationComptage.resume.map((r) => {
+                const grosEcart = Math.abs(r.ecart) >= 10;
+                return (
+                  <div
+                    key={r.produitId}
+                    style={{
+                      padding: '10px 12px',
+                      marginBottom: '8px',
+                      borderRadius: '8px',
+                      border: grosEcart ? '1px solid #e0a9a0' : '1px solid #eee3cf',
+                      background: grosEcart ? '#FDECEA' : '#FFFAF0',
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: '14px' }}>{r.nom}</div>
+                    <div style={{ fontSize: '13px', color: '#555', marginTop: '2px' }}>
+                      Système : {r.systeme} → Compté : <strong>{r.compte}</strong>{' '}
+                      <span style={{ fontWeight: 700, color: r.ecart < 0 ? '#c0392b' : '#2E7D32' }}>
+                        ({r.ecart > 0 ? `+${r.ecart}` : r.ecart})
+                      </span>
+                    </div>
+                    {grosEcart && (
+                      <div style={{ fontSize: '12px', color: '#c0392b', fontWeight: 600, marginTop: '3px' }}>
+                        ⚠️ Gros écart : vérifiez que vous n'avez pas fait une faute de frappe
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ padding: '10px 20px 18px' }}>
+              {confirmationComptage.valeurPertes > 0 && (
+                <div style={{ fontWeight: 600, color: '#c0392b', marginBottom: '12px', fontSize: '14px' }}>
+                  Valeur des pertes : {confirmationComptage.valeurPertes.toLocaleString('fr-FR')} FCFA
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  onClick={() => setConfirmationComptage(null)}
+                  disabled={envoi}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: '#F2F1EE',
+                    color: '#6B4A1F',
+                    border: '1px solid #E6E0D6',
+                    borderRadius: '8px',
+                    fontFamily: 'Poppins, sans-serif',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Annuler, corriger
+                </button>
+                <button
+                  onClick={enregistrerCorrectionsConfirmees}
+                  disabled={envoi}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: '#C9822A',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontFamily: 'Poppins, sans-serif',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {envoi ? 'Enregistrement...' : 'Confirmer et enregistrer'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
            <h1>Inventaire</h1>
       <p style={{ color: '#6B6357', fontSize: '13px', marginTop: '-8px', marginBottom: '16px' }}>
         🔄 Relève tous les 3 jours : comptez à deux, l'employé qui termine son tour valide avant de partir.
