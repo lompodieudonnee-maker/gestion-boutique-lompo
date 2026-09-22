@@ -43,6 +43,10 @@ function Inventaire() {
   const [dateDebutPertes, setDateDebutPertes] = useState('');
   const [dateFinPertes, setDateFinPertes] = useState('');
 
+  // Comparaison entre deux comptages physiques (onglet "Comparer")
+  const [comptageASelectionne, setComptageASelectionne] = useState('');
+  const [comptageBSelectionne, setComptageBSelectionne] = useState('');
+
   useEffect(() => {
     if (boutiqueId) {
       chargerDonnees();
@@ -184,6 +188,70 @@ function Inventaire() {
     (total, m) => total + Math.abs(Number(m.quantite)) * prixAchatProduit(m.produit_id),
     0
   );
+
+  // --- Comparaison entre deux comptages physiques ---
+  // Chaque comptage validé enregistre tous ses écarts en un seul envoi (même
+  // instant exact en base) : on regroupe donc les "Correction inventaire"
+  // par created_at pour retrouver les comptages passés un par un.
+  const sessionsComptage = (() => {
+    const corrections = mouvements.filter((m) => m.type_mouvement === 'Correction inventaire');
+    const groupes = {};
+    corrections.forEach((m) => {
+      const cle = m.created_at;
+      if (!groupes[cle]) groupes[cle] = [];
+      groupes[cle].push(m);
+    });
+    return Object.entries(groupes)
+      .map(([cle, lignes]) => ({ cle, date: new Date(cle), lignes }))
+      .sort((a, b) => b.date - a.date);
+  })();
+
+  const sessionA = sessionsComptage.find((s) => s.cle === comptageASelectionne) || null;
+  const sessionB = sessionsComptage.find((s) => s.cle === comptageBSelectionne) || null;
+
+  function libelleSession(session) {
+    return `${session.date.toLocaleDateString('fr-FR')} à ${session.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} (${session.lignes.length} écart(s))`;
+  }
+
+  function ecartPourProduit(session, produitId) {
+    if (!session) return null;
+    const ligne = session.lignes.find((l) => String(l.produit_id) === String(produitId));
+    return ligne ? Number(ligne.quantite) : 0;
+  }
+
+  function valeurPertesSession(session) {
+    if (!session) return 0;
+    return session.lignes
+      .filter((l) => Number(l.quantite) < 0)
+      .reduce((t, l) => t + Math.abs(Number(l.quantite)) * prixAchatProduit(l.produit_id), 0);
+  }
+
+  const produitIdsComparaison = Array.from(
+    new Set([
+      ...((sessionA ? sessionA.lignes : []).map((l) => String(l.produit_id))),
+      ...((sessionB ? sessionB.lignes : []).map((l) => String(l.produit_id))),
+    ])
+  );
+
+  const lignesComparaison = (sessionA || sessionB)
+    ? produitIdsComparaison
+        .map((produitId) => {
+          const ecartA = ecartPourProduit(sessionA, produitId);
+          const ecartB = ecartPourProduit(sessionB, produitId);
+          const valeurA = ecartA !== null && ecartA < 0 ? Math.abs(ecartA) * prixAchatProduit(produitId) : 0;
+          const valeurB = ecartB !== null && ecartB < 0 ? Math.abs(ecartB) * prixAchatProduit(produitId) : 0;
+          return {
+            produitId,
+            nom: nomProduit(produitId),
+            ecartA,
+            ecartB,
+            valeurA,
+            valeurB,
+            recurrent: ecartA !== null && ecartB !== null && ecartA < 0 && ecartB < 0,
+          };
+        })
+        .sort((a, b) => (b.valeurA + b.valeurB) - (a.valeurA + a.valeurB))
+    : [];
 
   function changerComptage(idProduit, valeur) {
     setComptages({ ...comptages, [idProduit]: valeur });
@@ -685,6 +753,12 @@ function Inventaire() {
         >
           📉 Pertes
         </button>
+        <button
+          className={ongletActif === 'comparaison' ? 'actif' : ''}
+          onClick={() => setOngletActif('comparaison')}
+        >
+          ⚖️ Comparer
+        </button>
       </div>
 
       {ongletActif === 'valorisation' && (
@@ -1114,6 +1188,178 @@ function Inventaire() {
               Total des pertes {(dateDebutPertes || dateFinPertes) ? 'sur cette période' : '(toutes dates)'} :{' '}
               {valeurTotalePertes.toLocaleString('fr-FR')} FCFA
             </h3>
+          )}
+        </>
+      )}
+
+      {ongletActif === 'comparaison' && (
+        <>
+          <p style={{ color: '#6B6357', marginBottom: '15px' }}>
+            Comparez deux comptages physiques déjà validés pour voir si les écarts s'aggravent, s'améliorent, ou si ce sont
+            toujours les mêmes produits qui posent problème.
+          </p>
+
+          {sessionsComptage.length < 2 ? (
+            <p style={{ color: '#6B6357' }}>
+              Il faut au moins deux comptages physiques validés (avec écart) pour pouvoir comparer. Revenez ici après votre
+              prochain comptage.
+            </p>
+          ) : (
+            <>
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '12px',
+                  alignItems: 'flex-end',
+                  flexWrap: 'wrap',
+                  backgroundColor: 'white',
+                  border: '1px solid #E6E0D6',
+                  borderRadius: '10px',
+                  padding: '14px 16px',
+                  marginBottom: '20px',
+                }}
+              >
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#6B6357', marginBottom: '4px' }}>
+                    Comptage A (le plus ancien)
+                  </label>
+                  <select
+                    value={comptageASelectionne}
+                    onChange={(e) => setComptageASelectionne(e.target.value)}
+                    style={{ padding: '7px 10px', border: '1px solid #E6E0D6', borderRadius: '6px', minWidth: '260px' }}
+                  >
+                    <option value="">-- Choisir un comptage --</option>
+                    {sessionsComptage.map((s) => (
+                      <option key={s.cle} value={s.cle}>{libelleSession(s)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', color: '#6B6357', marginBottom: '4px' }}>
+                    Comptage B (le plus récent)
+                  </label>
+                  <select
+                    value={comptageBSelectionne}
+                    onChange={(e) => setComptageBSelectionne(e.target.value)}
+                    style={{ padding: '7px 10px', border: '1px solid #E6E0D6', borderRadius: '6px', minWidth: '260px' }}
+                  >
+                    <option value="">-- Choisir un comptage --</option>
+                    {sessionsComptage.map((s) => (
+                      <option key={s.cle} value={s.cle}>{libelleSession(s)}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {!sessionA && !sessionB ? (
+                <p style={{ color: '#6B6357' }}>Choisissez deux comptages ci-dessus pour voir la comparaison.</p>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '18px' }}>
+                    <div
+                      style={{
+                        background: '#FDECEA',
+                        border: '1px solid #e0a9a0',
+                        borderRadius: '10px',
+                        padding: '14px 18px',
+                        minWidth: '220px',
+                      }}
+                    >
+                      <div style={{ fontSize: '12px', color: '#6B6357', fontWeight: 600 }}>
+                        Pertes — Comptage A{sessionA ? '' : ' (non choisi)'}
+                      </div>
+                      <div style={{ fontSize: '20px', fontWeight: 700, color: '#B71C1C' }}>
+                        {valeurPertesSession(sessionA).toLocaleString('fr-FR')} FCFA
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        background: '#FDECEA',
+                        border: '1px solid #e0a9a0',
+                        borderRadius: '10px',
+                        padding: '14px 18px',
+                        minWidth: '220px',
+                      }}
+                    >
+                      <div style={{ fontSize: '12px', color: '#6B6357', fontWeight: 600 }}>
+                        Pertes — Comptage B{sessionB ? '' : ' (non choisi)'}
+                      </div>
+                      <div style={{ fontSize: '20px', fontWeight: 700, color: '#B71C1C' }}>
+                        {valeurPertesSession(sessionB).toLocaleString('fr-FR')} FCFA
+                      </div>
+                    </div>
+                    {sessionA && sessionB && (
+                      <div
+                        style={{
+                          background: valeurPertesSession(sessionB) > valeurPertesSession(sessionA) ? '#FDECEA' : '#EAF5EC',
+                          border: `1px solid ${valeurPertesSession(sessionB) > valeurPertesSession(sessionA) ? '#e0a9a0' : '#b7d9bb'}`,
+                          borderRadius: '10px',
+                          padding: '14px 18px',
+                          minWidth: '220px',
+                        }}
+                      >
+                        <div style={{ fontSize: '12px', color: '#6B6357', fontWeight: 600 }}>Évolution</div>
+                        <div
+                          style={{
+                            fontSize: '20px',
+                            fontWeight: 700,
+                            color: valeurPertesSession(sessionB) > valeurPertesSession(sessionA) ? '#B71C1C' : '#2E7D32',
+                          }}
+                        >
+                          {valeurPertesSession(sessionB) - valeurPertesSession(sessionA) > 0 ? '+' : ''}
+                          {(valeurPertesSession(sessionB) - valeurPertesSession(sessionA)).toLocaleString('fr-FR')} FCFA
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <table className="stock-tableau">
+                    <thead>
+                      <tr>
+                        <th>Produit</th>
+                        <th>Écart Comptage A</th>
+                        <th>Écart Comptage B</th>
+                        <th>Statut</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lignesComparaison.map((l) => (
+                        <tr key={l.produitId} style={l.recurrent ? { background: '#FDECEA' } : undefined}>
+                          <td>{l.nom}</td>
+                          <td style={{ color: l.ecartA === null ? '#999' : l.ecartA < 0 ? '#B71C1C' : l.ecartA > 0 ? '#2E7D32' : '#555', fontWeight: 600 }}>
+                            {l.ecartA === null ? '—' : l.ecartA > 0 ? `+${l.ecartA}` : l.ecartA}
+                          </td>
+                          <td style={{ color: l.ecartB === null ? '#999' : l.ecartB < 0 ? '#B71C1C' : l.ecartB > 0 ? '#2E7D32' : '#555', fontWeight: 600 }}>
+                            {l.ecartB === null ? '—' : l.ecartB > 0 ? `+${l.ecartB}` : l.ecartB}
+                          </td>
+                          <td style={{ fontSize: '12px', fontWeight: 600, color: l.recurrent ? '#B71C1C' : '#6B6357' }}>
+                            {l.recurrent ? '⚠️ Perte répétée' : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {lignesComparaison.some((l) => l.recurrent) && (
+                    <div
+                      style={{
+                        marginTop: '16px',
+                        padding: '14px 18px',
+                        background: '#FDECE1',
+                        border: '1px solid #F3D2B0',
+                        borderRadius: '10px',
+                        maxWidth: '600px',
+                        fontSize: '13px',
+                        color: '#6B4A1F',
+                      }}
+                    >
+                      ⚠️ {lignesComparaison.filter((l) => l.recurrent).length} produit(s) perdent en écart négatif sur les
+                      deux comptages comparés — à surveiller en priorité (erreur de comptage répétée, ou perte/vol régulier).
+                    </div>
+                  )}
+                </>
+              )}
+            </>
           )}
         </>
       )}
