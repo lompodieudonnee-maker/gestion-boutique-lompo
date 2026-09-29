@@ -57,6 +57,8 @@ function AdminBoutiques({ onDeconnexion }) {
       .update({
         date_dernier_paiement: maintenant.toISOString(),
         date_fin_abonnement: finAbonnement.toISOString(),
+        // La boutique passe en abonnement payant : on sort de la période d'essai
+        date_fin_essai: null,
       })
       .eq('id', id)
     chargerBoutiques()
