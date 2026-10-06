@@ -33,6 +33,11 @@ function Caisse() {
   const [dateFinRapport, setDateFinRapport] = useState('')
   const [genererEnCours, setGenererEnCours] = useState(false)
 
+  // Empêche qu'un double-clic (ou un double-tap sur connexion lente) sur
+  // "Valider la vente" n'enregistre deux fois la même vente : le bouton est
+  // désactivé dès le premier clic, jusqu'à la fin de l'enregistrement.
+  const [enregistrementVenteEnCours, setEnregistrementVenteEnCours] = useState(false)
+
   async function chargerProduits() {
     
     const { data, error } = await supabase
@@ -273,6 +278,20 @@ function Caisse() {
   )
 
   async function validerVente() {
+    // Protection anti-double-clic / double-tap : si une vente est déjà en
+    // cours d'enregistrement, on ignore tout nouveau clic sur le bouton tant
+    // que celle-ci n'est pas terminée (succès ou erreur).
+    if (enregistrementVenteEnCours) return
+    setEnregistrementVenteEnCours(true)
+
+    try {
+      await validerVenteInterne()
+    } finally {
+      setEnregistrementVenteEnCours(false)
+    }
+  }
+
+  async function validerVenteInterne() {
     if (panier.length === 0) {
       alert('Le panier est vide.')
       return
@@ -793,9 +812,20 @@ function Caisse() {
 
           <button
             onClick={validerVente}
-            style={{ padding: '11px 22px', fontSize: '15px', backgroundColor: '#C9822A', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontFamily: 'Poppins, Arial, sans-serif', fontWeight: 500 }}
+            disabled={enregistrementVenteEnCours}
+            style={{
+              padding: '11px 22px',
+              fontSize: '15px',
+              backgroundColor: enregistrementVenteEnCours ? '#D9B486' : '#C9822A',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: enregistrementVenteEnCours ? 'not-allowed' : 'pointer',
+              fontFamily: 'Poppins, Arial, sans-serif',
+              fontWeight: 500,
+            }}
           >
-            ✅ Valider la vente
+            {enregistrementVenteEnCours ? 'Enregistrement...' : '✅ Valider la vente'}
           </button>
         </div>
       </div>
