@@ -43,6 +43,10 @@ function Inventaire() {
   const [dateDebutPertes, setDateDebutPertes] = useState('');
   const [dateFinPertes, setDateFinPertes] = useState('');
 
+  // Filtre de l'historique des mouvements (onglet Entrée/Sortie)
+  const [dateDebutMouvements, setDateDebutMouvements] = useState('');
+  const [dateFinMouvements, setDateFinMouvements] = useState('');
+
   // Comparaison entre deux comptages physiques (onglet "Comparer")
   const [comptageASelectionne, setComptageASelectionne] = useState('');
   const [comptageBSelectionne, setComptageBSelectionne] = useState('');
@@ -188,6 +192,37 @@ function Inventaire() {
     (total, m) => total + Math.abs(Number(m.quantite)) * prixAchatProduit(m.produit_id),
     0
   );
+
+  // --- Filtrage de l'historique des mouvements (onglet Entrée/Sortie) ---
+  // Sans filtre actif, on garde l'ancien comportement (50 mouvements les plus
+  // récents, toutes périodes confondues). Dès qu'une recherche produit ou une
+  // période est choisie, on affiche TOUS les mouvements correspondants (plus
+  // de limite à 50) pour ne plus jamais cacher un mouvement plus ancien
+  // (par exemple une correction d'inventaire) derrière les ventes récentes.
+  const filtreMouvementsActif = !!rechercheProduit || !!(dateDebutMouvements && dateFinMouvements);
+
+  const mouvementsFiltres = (() => {
+    let liste = mouvements;
+
+    if (rechercheProduit) {
+      liste = liste.filter((m) =>
+        nomProduit(m.produit_id).toLowerCase().includes(rechercheProduit.toLowerCase())
+      );
+    }
+
+    if (dateDebutMouvements && dateFinMouvements) {
+      const debut = new Date(dateDebutMouvements);
+      debut.setHours(0, 0, 0, 0);
+      const fin = new Date(dateFinMouvements);
+      fin.setHours(23, 59, 59, 999);
+      liste = liste.filter((m) => {
+        const d = new Date(m.created_at);
+        return d >= debut && d <= fin;
+      });
+    }
+
+    return filtreMouvementsActif ? liste : liste.slice(0, 50);
+  })();
 
   // --- Comparaison entre deux comptages physiques ---
   // Chaque comptage validé enregistre tous ses écarts en un seul envoi (même
@@ -1057,8 +1092,63 @@ function Inventaire() {
           </div>
 
           <h3 style={{ marginBottom: '10px' }}>Historique des mouvements</h3>
-          {mouvements.length === 0 ? (
-            <p style={{ color: '#6B6357' }}>Aucun mouvement enregistré.</p>
+
+          <div
+            style={{
+              display: 'flex',
+              gap: '12px',
+              alignItems: 'flex-end',
+              flexWrap: 'wrap',
+              backgroundColor: 'white',
+              border: '1px solid #E6E0D6',
+              borderRadius: '10px',
+              padding: '14px 16px',
+              marginBottom: '16px',
+            }}
+          >
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', color: '#6B6357', marginBottom: '4px' }}>Du</label>
+              <input
+                type="date"
+                value={dateDebutMouvements}
+                onChange={(e) => setDateDebutMouvements(e.target.value)}
+                style={{ padding: '7px 10px', border: '1px solid #E6E0D6', borderRadius: '6px' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', color: '#6B6357', marginBottom: '4px' }}>Au</label>
+              <input
+                type="date"
+                value={dateFinMouvements}
+                onChange={(e) => setDateFinMouvements(e.target.value)}
+                style={{ padding: '7px 10px', border: '1px solid #E6E0D6', borderRadius: '6px' }}
+              />
+            </div>
+            {(dateDebutMouvements || dateFinMouvements) && (
+              <button
+                onClick={() => { setDateDebutMouvements(''); setDateFinMouvements('') }}
+                style={{
+                  padding: '8px 14px',
+                  border: '1px solid #E6E0D6',
+                  borderRadius: '6px',
+                  background: 'white',
+                  color: '#6B6357',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                }}
+              >
+                Effacer les dates
+              </button>
+            )}
+            <div style={{ fontSize: '12px', color: '#6B6357', maxWidth: '320px' }}>
+              {filtreMouvementsActif
+                ? `${mouvementsFiltres.length} mouvement(s) trouvé(s) pour ce filtre.`
+                : `${mouvementsFiltres.length} mouvement(s) affiché(s) — les plus récents. Utilisez la recherche produit en haut de page ou une période ci-dessus pour retrouver un mouvement plus ancien (ex : une correction d'inventaire).`}
+            </div>
+          </div>
+
+          {mouvementsFiltres.length === 0 ? (
+            <p style={{ color: '#6B6357' }}>Aucun mouvement ne correspond à ce filtre.</p>
           ) : (
             <table className="stock-tableau">
               <thead>
@@ -1072,21 +1162,24 @@ function Inventaire() {
                 </tr>
               </thead>
               <tbody>
-                {mouvements.slice(0, 50).map((m) => (
-                  <tr key={m.id}>
-                    <td>
-                      {new Date(m.created_at).toLocaleDateString('fr-FR')}{' '}
-                      {new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td>{nomProduit(m.produit_id)}</td>
-                    <td>{m.type_mouvement}</td>
-                    <td style={{ color: Number(m.quantite) >= 0 ? '#2E7D32' : '#B71C1C', fontWeight: 600 }}>
-                      {Number(m.quantite) >= 0 ? `+${m.quantite}` : m.quantite}
-                    </td>
-                    <td>{m.motif}</td>
-                    <td>{nomEmploye(m.employe_id)}</td>
-                  </tr>
-                ))}
+                {mouvementsFiltres.map((m) => {
+                  const estCorrection = m.type_mouvement === 'Correction inventaire';
+                  return (
+                    <tr key={m.id} style={estCorrection ? { backgroundColor: '#FDF3E3' } : undefined}>
+                      <td>
+                        {new Date(m.created_at).toLocaleDateString('fr-FR')}{' '}
+                        {new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td>{nomProduit(m.produit_id)}</td>
+                      <td>{estCorrection ? '📋 ' : ''}{m.type_mouvement}</td>
+                      <td style={{ color: Number(m.quantite) >= 0 ? '#2E7D32' : '#B71C1C', fontWeight: 600 }}>
+                        {Number(m.quantite) >= 0 ? `+${m.quantite}` : m.quantite}
+                      </td>
+                      <td>{m.motif}</td>
+                      <td>{nomEmploye(m.employe_id)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
