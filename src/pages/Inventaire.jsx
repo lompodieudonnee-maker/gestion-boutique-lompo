@@ -374,7 +374,13 @@ function Inventaire() {
 
   async function enregistrerCorrectionsConfirmees() {
     if (!confirmationComptage) return;
-    const { corrections } = confirmationComptage;
+    const { corrections, resume, valeurPertes } = confirmationComptage;
+
+    // Le rapport part automatiquement au propriétaire sur WhatsApp.
+    // La fenêtre est ouverte tout de suite, au clic, pour que le navigateur ne la bloque pas.
+    const numero = whatsappResponsable.replace(/[^0-9]/g, '')
+    const fenetreWhatsApp = numero ? window.open('', '_blank') : null
+
     setEnvoi(true);
 
     try {
@@ -383,17 +389,55 @@ function Inventaire() {
 
       if (error) {
         console.error('Erreur enregistrement comptage :', error);
+        fenetreWhatsApp?.close();
         setConfirmationComptage(null);
         alert('Le comptage n\'a PAS été enregistré.\nMessage : ' + error.message + '\nNotez ce message et envoyez-le à l\'administrateur.');
         return;
       }
 
+      if (fenetreWhatsApp) {
+        const maintenant = new Date();
+        const pertes = resume.filter((r) => r.ecart < 0);
+        const surplus = resume.filter((r) => r.ecart > 0);
+
+        let message =
+          `📋 Rapport d'inventaire — ${nomBoutique || 'la boutique'}\n` +
+          `Date : ${maintenant.toLocaleDateString('fr-FR')} à ${maintenant.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}\n` +
+          `Employé de jour (responsable) : ${employeConnecte?.nom || 'Inconnu'}\n\n`;
+
+        if (pertes.length > 0) {
+          message += `🔴 PERTES (${pertes.length} produit(s)) :\n`;
+          pertes.forEach((r) => {
+            const valeur = Math.abs(r.ecart) * prixAchatProduit(r.produitId);
+            message += `- ${r.nom} : ${r.ecart} (système ${r.systeme}, compté ${r.compte}) = ${valeur.toLocaleString('fr-FR')} FCFA\n`;
+          });
+          message += `Valeur totale des pertes : ${valeurPertes.toLocaleString('fr-FR')} FCFA\n\n`;
+        } else {
+          message += `✅ Aucune perte.\n\n`;
+        }
+
+        if (surplus.length > 0) {
+          message += `🟢 SURPLUS (${surplus.length} produit(s)) :\n`;
+          surplus.forEach((r) => {
+            message += `- ${r.nom} : +${r.ecart} (système ${r.systeme}, compté ${r.compte})\n`;
+          });
+          message += `\n`;
+        }
+
+        message += `Le stock a été corrigé dans Stockia. Détail : Inventaire → Pertes.`;
+        fenetreWhatsApp.location.href = `https://wa.me/${numero}?text=${encodeURIComponent(message)}`;
+      }
+
       setConfirmationComptage(null);
       setComptages({});
       await chargerDonnees();
-      alert(`Comptage validé : ${corrections.length} écart(s) enregistré(s).`);
+      alert(
+        `Comptage validé : ${corrections.length} écart(s) enregistré(s) au nom de ${employeConnecte?.nom || 'l\'employé connecté'}.` +
+        (numero ? '' : '\n\nAucun numéro WhatsApp du responsable n\'est configuré : le propriétaire n\'a pas été prévenu. Demandez-lui de le renseigner en haut de la page Inventaire.')
+      );
     } catch (e) {
       console.error(e);
+      fenetreWhatsApp?.close();
       setConfirmationComptage(null);
       alert('Erreur inattendue : ' + (e?.message || e) + '\nLe comptage n\'a peut-être pas été enregistré. Vérifiez la connexion internet et réessayez.');
     } finally {
@@ -585,6 +629,9 @@ function Inventaire() {
               <h3 style={{ margin: 0, color: '#6B4A1F' }}>Vérifiez avant d'enregistrer</h3>
               <p style={{ margin: '6px 0 0', fontSize: '13px', color: '#6B6357' }}>
                 {confirmationComptage.resume.length} produit(s) avec écart. Ces chiffres sont-ils bien ceux que vous avez comptés ?
+              </p>
+              <p style={{ margin: '6px 0 0', fontSize: '12px', color: '#6B4A1F' }}>
+                👤 Les pertes seront enregistrées au nom de <strong>{employeConnecte?.nom || 'l\'employé connecté'}</strong> (employé de jour), et le rapport sera envoyé au propriétaire sur WhatsApp.
               </p>
             </div>
 
