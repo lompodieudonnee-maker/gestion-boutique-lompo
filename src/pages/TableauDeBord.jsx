@@ -30,6 +30,9 @@ function TableauDeBord({ setPageActive }) {
   const [dateDebutPerso, setDateDebutPerso] = useState('')
   const [dateFinPerso, setDateFinPerso] = useState('')
   const [dernieresVentes, setDernieresVentes] = useState([])
+  const [meilleursProduits, setMeilleursProduits] = useState([])
+  const [triMeilleurs, setTriMeilleurs] = useState('quantite') // 'quantite' | 'ca' | 'benefice'
+  const [toutVoirMeilleurs, setToutVoirMeilleurs] = useState(false)
   const [ventesRecentes, setVentesRecentes] = useState([])
   const [annulationEnCours, setAnnulationEnCours] = useState(null)
     const [nomBoutique, setNomBoutique] = useState('')
@@ -137,7 +140,7 @@ function TableauDeBord({ setPageActive }) {
     const { data: itemsVentes } = await fetchAllRows(
       'sale_items',
       boutiqueId,
-      'nom_produit, quantite, sale_id, product_id'
+      'nom_produit, quantite, prix_unitaire, sale_id, product_id'
     )
 
     const itemsPeriode = (itemsVentes || [])
@@ -160,6 +163,22 @@ function TableauDeBord({ setPageActive }) {
     const coutMarchandisesVendues = itemsPeriode.reduce(
       (s, item) => s + (prixAchatParProduit[item.product_id] || 0) * Number(item.quantite || 0),
       0
+    )
+
+    // --- Meilleurs produits vendus sur la période (quantité, chiffre d'affaires, bénéfice) ---
+    const statsParProduit = {}
+    itemsPeriode.forEach((item) => {
+      const cle = item.product_id != null ? String(item.product_id) : `nom-${item.nom_produit}`
+      if (!statsParProduit[cle]) {
+        statsParProduit[cle] = { cle, nom: item.nom_produit || 'Produit', quantite: 0, ca: 0, cout: 0 }
+      }
+      const qte = Number(item.quantite || 0)
+      statsParProduit[cle].quantite += qte
+      statsParProduit[cle].ca += qte * Number(item.prix_unitaire || 0)
+      statsParProduit[cle].cout += qte * (prixAchatParProduit[item.product_id] || 0)
+    })
+    setMeilleursProduits(
+      Object.values(statsParProduit).map((p) => ({ ...p, benefice: p.ca - p.cout }))
     )
 
     const ca = ventesFiltrees.reduce((s, v) => s + Number(v.total || 0), 0)
