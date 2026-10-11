@@ -16,7 +16,9 @@ function TableauDeBord({ setPageActive }) {
   const [totalCash, setTotalCash] = useState(0)
   const [totalMobile, setTotalMobile] = useState(0)
   const [encaissement, setEncaissement] = useState(0)
-  const [margeBrute, setMargeBrute] = useState(0)
+  const [margeBrute, setMargeBrute] = useState(0) // résultat après dépenses
+  const [beneficeVentes, setBeneficeVentes] = useState(0) // ventes - coût des produits vendus
+  const [depensesPeriode, setDepensesPeriode] = useState(0)
   const [creditsPayes, setCreditsPayes] = useState(0)
   const [dettesClients, setDettesClients] = useState(0)
 
@@ -210,6 +212,8 @@ function TableauDeBord({ setPageActive }) {
 
     // Bénéfice = Chiffre d'affaires - Coût des produits réellement vendus - Dépenses de fonctionnement
     setMargeBrute(ca - coutMarchandisesVendues - totalDepenses)
+    setBeneficeVentes(ca - coutMarchandisesVendues)
+    setDepensesPeriode(totalDepenses)
 
     // Dettes fournisseurs (toujours globales)
     const dettesF = (achats || []).reduce(

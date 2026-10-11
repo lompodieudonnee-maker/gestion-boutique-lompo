@@ -2,11 +2,20 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { getBoutiqueId } from '../lib/boutique'
 
+// Date du jour au format AAAA-MM-JJ (heure locale du téléphone / ordinateur)
+function dateDuJour() {
+  const d = new Date()
+  const mois = String(d.getMonth() + 1).padStart(2, '0')
+  const jour = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mois}-${jour}`
+}
+
 function Depenses() {
   const [depenses, setDepenses] = useState([])
   const [categorie, setCategorie] = useState('')
   const [description, setDescription] = useState('')
   const [montant, setMontant] = useState('')
+  const [dateDepense, setDateDepense] = useState(dateDuJour())
 
   const [totalVentes, setTotalVentes] = useState(0)
   const [totalAchats, setTotalAchats] = useState(0)
@@ -57,9 +66,23 @@ function Depenses() {
       alert('Entrez un montant valide')
       return
     }
-    const { error } = await supabase.from('depenses').insert([
-      { categorie, description, montant: Number(montant), boutique_id: boutiqueId },
-    ])
+    if (!dateDepense) {
+      alert('Choisissez la date de la dépense')
+      return
+    }
+    if (dateDepense > dateDuJour()) {
+      alert('La date de la dépense ne peut pas être dans le futur.')
+      return
+    }
+
+    const nouvelleDepense = { categorie, description, montant: Number(montant), boutique_id: boutiqueId }
+    // Dépense d'un jour passé : on la rattache à ce jour-là (à midi) pour qu'elle
+    // compte dans le bénéfice du bon jour. Dépense du jour : heure réelle de saisie.
+    if (dateDepense !== dateDuJour()) {
+      nouvelleDepense.created_at = new Date(`${dateDepense}T12:00:00`).toISOString()
+    }
+
+    const { error } = await supabase.from('depenses').insert([nouvelleDepense])
     if (error) {
       alert('Erreur : ' + error.message)
       return
@@ -67,6 +90,7 @@ function Depenses() {
     setCategorie('')
     setDescription('')
     setMontant('')
+    setDateDepense(dateDuJour())
     chargerDepenses()
     chargerTotalVentes()
     chargerTotalAchats()
@@ -160,7 +184,21 @@ function Depenses() {
           value={montant}
           onChange={(e) => setMontant(e.target.value)}
         />
-        <br />
+        <div style={{ display: 'inline-block', verticalAlign: 'top' }}>
+          <label style={{ display: 'block', fontSize: '12px', color: '#6B6357', marginBottom: '2px' }}>
+            Date de la dépense
+          </label>
+          <input
+            style={styleInput}
+            type="date"
+            value={dateDepense}
+            max={dateDuJour()}
+            onChange={(e) => setDateDepense(e.target.value)}
+          />
+        </div>
+        <p style={{ fontSize: '12px', color: '#6B6357', margin: '0 0 10px' }}>
+          💡 Si la dépense concerne un autre jour (ex : courant du 07/10), choisissez ce jour-là : elle sera comptée dans le bénéfice du bon jour.
+        </p>
         <button style={styleBouton} onClick={ajouterDepense}>+ Ajouter la dépense</button>
       </div>
 
@@ -181,6 +219,11 @@ function Depenses() {
             <div>
               <strong>{d.categorie || 'Sans catégorie'}</strong>
               {d.description && <span style={{ color: '#6B6357' }}> — {d.description}</span>}
+              {d.created_at && (
+                <div style={{ fontSize: '12px', color: '#6B6357', marginTop: '3px' }}>
+                  📅 {new Date(d.created_at).toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}
+                </div>
+              )}
             </div>
             <div style={{ fontWeight: 700, color: '#B71C1C' }}>-{d.montant} FCFA</div>
           </div>
