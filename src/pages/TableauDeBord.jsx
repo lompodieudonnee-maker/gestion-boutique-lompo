@@ -595,12 +595,27 @@ function TableauDeBord({ setPageActive }) {
         </div>
 
         {peutVoirFinances && (
-          <div style={{ ...styleCarte, backgroundColor: margeBrute >= 0 ? '#EAF5EC' : '#FBEAEA' }}>
-          <div style={styleTitre}>Bénéfice</div>
-            <div style={{ ...styleValeur, color: margeBrute >= 0 ? '#2E7D32' : '#B71C1C' }}>
-              {margeBrute.toLocaleString('fr-FR')} FCFA
+          <>
+            <div style={{ ...styleCarte, backgroundColor: beneficeVentes >= 0 ? '#EAF5EC' : '#FBEAEA' }}>
+              <div style={styleTitre}>Bénéfice sur ventes</div>
+              <div style={{ ...styleValeur, color: beneficeVentes >= 0 ? '#2E7D32' : '#B71C1C' }}>
+                {beneficeVentes.toLocaleString('fr-FR')} FCFA
+              </div>
+              <div style={{ fontSize: '12px', marginTop: '4px', color: '#6B6357' }}>
+                Caisse − coût d'achat des produits vendus
+              </div>
             </div>
-          </div>
+
+            <div style={{ ...styleCarte, backgroundColor: margeBrute >= 0 ? '#EAF5EC' : '#FBEAEA' }}>
+              <div style={styleTitre}>Résultat après dépenses</div>
+              <div style={{ ...styleValeur, color: margeBrute >= 0 ? '#2E7D32' : '#B71C1C' }}>
+                {margeBrute.toLocaleString('fr-FR')} FCFA
+              </div>
+              <div style={{ fontSize: '12px', marginTop: '4px', color: '#6B6357' }}>
+                {beneficeVentes.toLocaleString('fr-FR')} − {depensesPeriode.toLocaleString('fr-FR')} FCFA de dépenses
+              </div>
+            </div>
+          </>
         )}
 
         <div style={{ ...styleCarte, backgroundColor: '#F3E2CB' }}>
