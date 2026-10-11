@@ -425,8 +425,10 @@ function Inventaire() {
   }
 
   async function enregistrerMouvement() {
-    if (!peutValiderMouvement) {
-      alert('Seul le propriétaire ou un employé avec la permission "Voir les finances" peut valider ce mouvement.');
+    // Une ENTRÉE (réception fournisseur, réapprovisionnement) est enregistrée directement par
+    // tout employé. Seule la SORTIE reste réservée au propriétaire / "Voir les finances".
+    if (!peutValiderMouvement && typeMouvement !== 'Entrée') {
+      alert('Seul le propriétaire ou un employé avec la permission "Voir les finances" peut enregistrer une sortie de stock.');
       return;
     }
 
@@ -440,6 +442,15 @@ function Inventaire() {
       return;
     }
 
+    // Employé simple : on informera le responsable par WhatsApp (simple information, rien à valider).
+    // La fenêtre est ouverte tout de suite, au clic, pour que le navigateur ne la bloque pas.
+    const numero = whatsappResponsable.replace(/[^0-9]/g, '')
+    const informerResponsable = !peutValiderMouvement && !!numero
+    const fenetreWhatsApp = informerResponsable ? window.open('', '_blank') : null
+
+    const nom = nomProduit(produitMouvement)
+    const motif = motifMouvement || (typeMouvement === 'Entrée' ? 'Entrée manuelle' : 'Sortie manuelle')
+
     setEnvoiMouvement(true);
 
     const { error } = await supabase.from('stock_mouvements').insert({
@@ -448,21 +459,31 @@ function Inventaire() {
       employe_id: employeConnecte?.id,
       type_mouvement: typeMouvement,
       quantite: typeMouvement === 'Entrée' ? qte : -qte,
-      motif: motifMouvement || (typeMouvement === 'Entrée' ? 'Entrée manuelle' : 'Sortie manuelle'),
+      motif,
     });
 
     setEnvoiMouvement(false);
 
     if (error) {
+      fenetreWhatsApp?.close();
       alert('Erreur : ' + error.message);
       return;
+    }
+
+    if (fenetreWhatsApp) {
+      const message =
+        `ℹ️ Pour information — ${nomBoutique || 'la boutique'}\n\n` +
+        `${employeConnecte?.nom || 'Un employé'} vient d'enregistrer une ${typeMouvement.toLowerCase()} de stock :\n` +
+        `${nom} x${qte}\nMotif : ${motif}\n\n` +
+        `Le stock a déjà été mis à jour dans Stockia. Aucune action n'est nécessaire de votre part.`
+      fenetreWhatsApp.location.href = `https://wa.me/${numero}?text=${encodeURIComponent(message)}`
     }
 
     setProduitMouvement('');
     setQuantiteMouvement('');
     setMotifMouvement('');
     chargerDonnees();
-    alert('Mouvement enregistré avec succès.');
+    alert('Mouvement enregistré avec succès : le stock a été mis à jour.');
   }
 
   function formaterDateAffichage(dateStr) {
@@ -1040,24 +1061,31 @@ function Inventaire() {
               style={{ width: '100%', padding: '9px', marginBottom: '15px', border: '1px solid #E6E0D6', borderRadius: '6px', boxSizing: 'border-box' }}
             />
 
-            {peutValiderMouvement ? (
-              <button
-                onClick={enregistrerMouvement}
-                disabled={envoiMouvement}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  background: '#C9822A',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontFamily: 'Poppins, sans-serif',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                {envoiMouvement ? 'Enregistrement...' : 'Enregistrer le mouvement'}
-              </button>
+            {peutValiderMouvement || typeMouvement === 'Entrée' ? (
+              <>
+                <button
+                  onClick={enregistrerMouvement}
+                  disabled={envoiMouvement}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    background: '#C9822A',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontFamily: 'Poppins, sans-serif',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {envoiMouvement ? 'Enregistrement...' : 'Enregistrer le mouvement'}
+                </button>
+                {!peutValiderMouvement && (
+                  <p style={{ fontSize: '12px', color: '#6B6357', margin: '8px 0 0' }}>
+                    ℹ️ Le stock sera mis à jour tout de suite. Le responsable recevra un message WhatsApp pour information.
+                  </p>
+                )}
+              </>
             ) : (
               <div
                 style={{
