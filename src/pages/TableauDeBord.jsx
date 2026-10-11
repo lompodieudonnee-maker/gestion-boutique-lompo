@@ -654,6 +654,117 @@ function TableauDeBord({ setPageActive }) {
         </div>
       </div>
 
+      {(() => {
+        const triDisponible = peutVoirFinances ? triMeilleurs : (triMeilleurs === 'benefice' ? 'quantite' : triMeilleurs)
+        const listeTriee = [...meilleursProduits].sort((a, b) => b[triDisponible] - a[triDisponible])
+        const listeAffichee = toutVoirMeilleurs ? listeTriee : listeTriee.slice(0, 10)
+        const valeurMax = listeTriee.length > 0 ? Math.max(...listeTriee.map((p) => p[triDisponible]), 1) : 1
+        const medaille = (i) => (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`)
+        const libellePeriode = onglets.find((o) => o.id === ongletPeriode)?.label || ''
+        const optionsTri = [
+          { id: 'quantite', label: 'Quantité' },
+          { id: 'ca', label: "Chiffre d'affaires" },
+          ...(peutVoirFinances ? [{ id: 'benefice', label: 'Bénéfice' }] : []),
+        ]
+
+        return (
+          <div
+            style={{
+              marginTop: '20px',
+              backgroundColor: 'white',
+              border: '1px solid #E6E0D6',
+              borderRadius: '10px',
+              padding: '18px',
+            }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: '4px' }}>🔥 Meilleurs produits vendus</h3>
+            <p style={{ marginTop: 0, marginBottom: '12px', fontSize: '13px', color: '#6B6357' }}>
+              Période : {libellePeriode} — {meilleursProduits.length} produit(s) différent(s) vendu(s)
+            </p>
+
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
+              {optionsTri.map((o) => (
+                <button
+                  key={o.id}
+                  onClick={() => setTriMeilleurs(o.id)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '20px',
+                    border: '1px solid #E6E0D6',
+                    backgroundColor: triDisponible === o.id ? '#2B2620' : 'white',
+                    color: triDisponible === o.id ? 'white' : '#6B6357',
+                    cursor: 'pointer',
+                    fontFamily: 'Poppins, Arial, sans-serif',
+                    fontSize: '13px',
+                  }}
+                >
+                  Trier par {o.label}
+                </button>
+              ))}
+            </div>
+
+            {listeTriee.length === 0 ? (
+              <p style={{ color: '#6B6357' }}>Aucune vente sur cette période.</p>
+            ) : (
+              <>
+                {listeAffichee.map((p, i) => {
+                  const pourcentage = Math.max(2, (p[triDisponible] / valeurMax) * 100)
+                  return (
+                    <div key={p.cle} style={{ padding: '8px 0', borderTop: i === 0 ? 'none' : '1px solid #F2EEE7' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'baseline', flexWrap: 'wrap' }}>
+                        <div style={{ fontWeight: i < 3 ? 700 : 500, fontSize: '14px' }}>
+                          <span style={{ display: 'inline-block', minWidth: '28px' }}>{medaille(i)}</span>
+                          {p.nom}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#6B6357', whiteSpace: 'nowrap' }}>
+                          <strong style={{ color: '#2B2620' }}>{p.quantite.toLocaleString('fr-FR')}</strong> vendu(s)
+                          {' · '}{p.ca.toLocaleString('fr-FR')} FCFA
+                          {peutVoirFinances && (
+                            <span style={{ color: p.benefice >= 0 ? '#2E7D32' : '#B71C1C' }}>
+                              {' · '}bénéf. {p.benefice.toLocaleString('fr-FR')} FCFA
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ height: '6px', backgroundColor: '#F2EEE7', borderRadius: '3px', marginTop: '6px' }}>
+                        <div
+                          style={{
+                            width: `${pourcentage}%`,
+                            height: '100%',
+                            backgroundColor: i < 3 ? '#C9822A' : '#E3C08E',
+                            borderRadius: '3px',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {listeTriee.length > 10 && (
+                  <button
+                    onClick={() => setToutVoirMeilleurs(!toutVoirMeilleurs)}
+                    style={{
+                      marginTop: '10px',
+                      padding: '7px 14px',
+                      border: '1px solid #E6E0D6',
+                      borderRadius: '8px',
+                      background: 'white',
+                      color: '#C9822A',
+                      cursor: 'pointer',
+                      fontFamily: 'Poppins, Arial, sans-serif',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {toutVoirMeilleurs ? 'Voir seulement le top 10' : `Voir les ${listeTriee.length} produits`}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )
+      })()}
+
       {peutVoirFinances && (
         <div
           style={{
